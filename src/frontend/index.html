@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Cost Intelligence Platform</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- Component 8: NavigationBar -->
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <h1>Cloud Cost Intelligence</h1>
+        </div>
+        <ul class="navbar-menu">
+            <li><a href="#dashboard" class="nav-link active" data-page="dashboard">Dashboard</a></li>
+            <li><a href="#waste-alerts" class="nav-link" data-page="waste">Waste Alerts</a></li>
+            <li><a href="#recommendations" class="nav-link" data-page="recommendations">Recommendations</a></li></a></li>
+            <li><a href="#settings" class="nav-link" data-page="settings">Settings</a></li>
+        </ul>
+    </nav>
+
+    <!-- Component 9: ErrorDisplay (hidden by default) -->
+    <div id="error-display" class="error-display hidden">
+        <div class="error-content">
+            <span class="error-message"></span>
+            <div class="error-actions">
+                <button class="btn-retry">Retry</button>
+                <button class="btn-dismiss">Dismiss</button>
+            </div>
+        </div>
+    </div>
+
+    <main class="container">
+        <!-- Component 1: DashboardView -->
+        <section id="dashboard-view" class="page active">
+            <div class="dashboard-header">
+                <h2>Cost Overview</h2>
+                <div class="dashboard-controls">
+                    <select id="date-range-selector" class="date-selector">
+                        <option value="7">Last 7 Days</option>
+                        <option value="30" selected>Last 30 Days</option>
+                        <option value="60">Last 60 Days</option>
+                        <option value="90">Last 90 Days</option>
+                    </select>
+                    <button id="refresh-button" class="btn-refresh">↻ Refresh</button>
+                </div>
+            </div>
+
+            <!-- Cost Summary Cards -->
+            <div class="cost-summary-cards">
+                <div class="summary-card">
+                    <h3>Total Spend</h3>
+                    <p class="cost-value" id="total-cost">$0.00</p>
+                    <span class="cost-period">Last 30 days</span>
+                </div>
+                <div class="summary-card aws">
+                    <h3>AWS Costs</h3>
+                    <p class="cost-value" id="aws-cost">$0.00</p>
+                    <span class="cost-period">Last 30 days</span>
+                </div>
+                <div class="summary-card azure">
+                    <h3>Azure Costs</h3>
+                    <p class="cost-value" id="azure-cost">$0.00</p>
+                    <span class="cost-period">Last 30 days</span>
+                </div>
+                <div class="summary-card">
+                    <h3>Potential Savings</h3>
+                    <p class="cost-value savings" id="potential-savings">$0.00</p>
+                    <span class="cost-period">Estimated monthly</span>
+                </div>
+            </div>
+
+            <!-- Component 3: FilterPanel -->
+            <div class="filter-panel">
+                <h3>Filters</h3>
+                <div class="filters">
+                    <div class="filter-group">
+                        <label>Provider</label>
+                        <select id="provider-filter" class="filter-select">
+                            <option value="">All Providers</option>
+                            <option value="1">AWS</option>
+                            <option value="2">Azure</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Service Type</label>
+                        <select id="service-filter" class="filter-select">
+                            <option value="">All Services</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Client</label>
+                        <select id="client-filter" class="filter-select">
+                            <option value="">All Clients</option>
+                        </select>
+                    </div>
+                    <div class="filter-actions">
+                        <button id="apply-filters" class="btn-primary">Apply Filters</button>
+                        <button id="clear-filters" class="btn-secondary">Clear</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Component 2: TrendChart -->
+            <div class="chart-container">
+                <h3>Spending Trends</h3>
+                <canvas id="trend-chart"></canvas>
+            </div>
+        </section>
+
+        <!-- Component 4: WasteAlertsList -->
+        <section id="waste-alerts-view" class="page">
+            <h2>Waste Alerts</h2>
+            <p class="page-description">Resources with low utilization or potential waste</p>
+            
+            <div class="alerts-container">
+                <table class="alerts-table">
+                    <thead>
+                        <tr>
+                            <th>Service Name</th>
+                            <th>Provider</th>
+                            <th>Client</th>
+                            <th>Avg Utilization</th>
+                            <th>Daily Cost</th>
+                            <th>Potential Savings</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="waste-alerts-body">
+                        <tr>
+                            <td colspan="7" class="loading">Loading waste alerts...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Component 5: RecommendationsPanel -->
+        <section id="recommendations-view" class="page">
+            <h2>Optimization Recommendations</h2>
+            <p class="page-description">Suggested actions to reduce cloud spending</p>
+            
+            <div id="recommendations-container" class="recommendations-grid">
+                <div class="loading">Loading recommendations...</div>
+            </div>
+        </section>
+
+        <!-- Component 6: BudgetSettings -->
+        <section id="settings-view" class="page">
+            <h2>Budget Settings</h2>
+            <p class="page-description">Configure spending limits and alert thresholds</p>
+            
+            <div class="settings-form">
+                <div class="form-group">
+                    <label for="client-select">Client</label>
+                    <select id="client-select" class="form-control">
+                        <option value="">Select a client</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="budget-amount">Monthly Budget ($)</label>
+                    <input type="number" id="budget-amount" class="form-control" placeholder="5000.00" step="0.01">
+                </div>
+                
+                <div class="form-group">
+                    <label for="monthly-limit">Monthly Limit ($)</label>
+                    <input type="number" id="monthly-limit" class="form-control" placeholder="6000.00" step="0.01">
+                </div>
+                
+                <div class="form-group">
+                    <label for="alert-threshold">Alert Threshold (%)</label>
+                    <input type="range" id="alert-threshold" class="slider" min="50" max="100" value="80" step="5">
+                    <span id="threshold-value" class="threshold-display">80%</span>
+                    <p class="help-text">Alert when spending reaches this percentage of budget</p>
+                </div>
+                
+                <div class="form-group checkbox-group">
+                    <label>
+                        <input type="checkbox" id="enable-alerts" checked>
+                        Enable Budget Alerts
+                    </label>
+                </div>
+                
+                <div class="form-actions">
+                    <button id="save-settings" class="btn-primary">Save Settings</button>
+                    <button id="cancel-settings" class="btn-secondary">Cancel</button>
+                </div>
+            </div>
+
+            <!-- Component 7: ExportModule -->
+            <div class="export-section">
+                <h3>Export Reports</h3>
+                <div class="export-controls">
+                    <div class="export-options">
+                        <label>Date Range</label>
+                        <select id="export-date-range" class="form-control">
+                            <option value="7">Last 7 Days</option>
+                            <option value="30" selected>Last 30 Days</option>
+                            <option value="60">Last 60 Days</option>
+                            <option value="90">Last 90 Days</option>
+                        </select>
+                    </div>
+                    <div class="export-buttons">
+                        <button id="export-csv" class="btn-export">Export CSV</button>
+                        <button id="export-pdf" class="btn-export">Export PDF</button>
+                    </div>
+                </div>
+                <div id="export-progress" class="export-progress hidden">
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                    <span class="progress-text">Preparing export...</span>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2026 The Code Collective | CMSC 495 Capstone Project</p>
+    </footer>
+
+    <!-- Load JavaScript files in order (non-module version for direct file opening) -->
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/dashboard.js"></script>
+</body>
+</html>
