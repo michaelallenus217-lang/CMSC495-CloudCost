@@ -1,0 +1,23 @@
+services:
+
+  frontend:
+    build:
+      context: ./src/frontend
+    ports:
+      - "8080:80"
+    volumes:
+      - ./src/frontend:/usr/share/nginx/html:ro
+
+  backend:
+    build:
+      context: ./src/backend
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./src/backend/.env
+    volumes:
+      - ./src/backend:/app/backend
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: >
+      python -u /app/backend/wsgi.py

@@ -1,23 +1,34 @@
 import os
+import sys
 import struct
-from azure.identity import InteractiveBrowserCredential, DefaultAzureCredential
+from azure.identity import (
+    DefaultAzureCredential,
+    DeviceCodeCredential,
+    InteractiveBrowserCredential,
+)
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import QueuePool
+import time
 
 SQL_COPT_SS_ACCESS_TOKEN = 1256  # ODBC access token attribute
 
 
-def _get_credential():
-    env = os.getenv("ENV", "local").lower()
 
-    # Local dev: interactive browser auth
-    if env == "local":
-        # Optional: set a tenant_id if your org has multiple tenants
+def _get_credential():
+    azure_identity_mode = os.getenv("AZURE_IDENTITY_MODE", "default").strip().lower()
+
+    if azure_identity_mode == "default":
+        # Production-oriented default. In dev, this can also work if you have az login, etc.
+        return DefaultAzureCredential(exclude_interactive_browser_credential=True)
+
+    if azure_identity_mode == "devicecode":
+        return DeviceCodeCredential()
+
+    if azure_identity_mode == "interactive":
         return InteractiveBrowserCredential()
 
-    # Non-local: use the standard chain (Managed Identity, workload identity, etc.)
-    return DefaultAzureCredential()
+    raise ValueError(f"Unknown AZURE_IDENTITY_MODE: {azure_identity_mode}")
 
 
 def _get_access_token() -> str:
@@ -42,7 +53,7 @@ def build_engine(server: str, database: str, pool_size: int, max_overflow: int, 
         f"Database={database};"
         "Encrypt=yes;"
         "TrustServerCertificate=no;"
-        "Connection Timeout=30;"
+        "Connection Timeout=60;"
     )
 
     connect_args = {

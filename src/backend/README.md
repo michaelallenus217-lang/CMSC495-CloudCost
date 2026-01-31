@@ -2,29 +2,56 @@
 
 Python API application.
 
-## Initial Setup
+## Setup & Run
 
-### Install Python dependencies
-
-```
-pip install flask sqlalchemy pyodbc azure-identity python-dotenv
-```
-
-### Configure .env
-
-Copy the example file and fill in real values:
+Regardless of your setup method, you will **need** to set up your .env file first. Copy the example file and fill in
+real values:
 
 ```
 cp src/backend/.env.example src/backend/.env
 ```
 
-### ODBC driver prerequisite
+### Docker
+
+#### Docker: Initial Setup
+
+The project contains a docker-compose.yml file in the root, which will start up the backend and the frontend servers.
+From the project root, you can set up and start the docker containers using the command:
+
+```
+docker compose up --build
+```
+
+#### Docker: Running
+
+After your initial setup, you can re-start the docker containers using the command:
+
+```
+docker compose up
+```
+
+Upon the back end starting up, you will be prompted to visit https://microsoft.com/devicelogin and provide a code in
+order to authenticate the backend with the Azure hosted database. You may be reprompted a second time on startup,
+and additional times if you make any changes to the backed python code. Without being authenticated, the backend
+cannot access the database.
+
+### Manual Install
+
+#### Manual: Install Python dependencies
+
+Python dependencies are listed in requirements.txt
+
+```
+pip install --no-cache-dir -r src/backend/requirements.txt
+```
+
+#### Manual: ODBC driver prerequisite
 
 This backend uses pyodbc, which requires a native SQL Server ODBC driver:
 
 - ODBC Driver 18 for SQL Server
 
-## Starting the server
+### Manual: Running
 
 From the repository root:
 
@@ -36,7 +63,7 @@ python -m backend.wsgi
 The API listens on FLASK_HOST:FLASK_PORT (default 127.0.0.1:5000).  
 On first database access, a browser window may open for Azure login.
 
-### Quick checks
+## Quick checks
 
 These health check endpoints can be used to check the status of the back end:
 
@@ -57,46 +84,46 @@ GET
 GET
 
 ### /api/v1/clients
-GET, POST
+GET
 
 ### /api/v1/clients/{clientId}
-GET, PUT, PATCH, DELETE
+GET
 
 ### /api/v1/clients/{clientId}/budget
-GET, PUT, PATCH, DELETE
+GET
 
 ### /api/v1/clients/{clientId}/invoices
-GET, POST
+GET
 
 ### /api/v1/clients/{clientId}/invoices/{invoiceId}
-GET, PUT, PATCH, DELETE
+GET
 
 ### /api/v1/clients/{clientId}/usage
-GET, POST
+GET
 
 ### /api/v1/clients/{clientId}/usage/{usageId}
-GET, PUT, PATCH, DELETE
+GET
 
 ### /api/v1/providers
-GET, POST
+GET
 
 ### /api/v1/providers/{providerId}
-GET, PUT, PATCH, DELETE
+GET
 
 ### /api/v1/providers/{providerId}/services
-GET, POST
+GET
 
 ### /api/v1/providers/{providerId}/services/{serviceId}
-GET, PUT, PATCH, DELETE
+GET
 
 ### /api/v1/services
-GET, POST
+GET
 
 ### /api/v1/services/{serviceId}
-GET, PUT, PATCH, DELETE
+GET
 
 ### /api/v1/services/{serviceId}/usage
-GET, POST
+GET
 
 ### /api/v1/services/{serviceId}/usage/{usageId}
-GET, PUT, PATCH, DELETE
+GET
