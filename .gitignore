@@ -57,3 +57,5 @@ Thumbs.db
 *.pem
 *.key
 credentials.json
+mac-test-start.sh
+mac-test-stop.sh
