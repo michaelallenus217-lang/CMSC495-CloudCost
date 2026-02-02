@@ -4,6 +4,7 @@
 let currentPage = 'dashboard';
 let dashboardChart = null;
 let currentDateRange = 30;
+let unfilteredDashboardData = null; // Cache for filtering
 
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', initApp);
@@ -96,12 +97,18 @@ function setupEventListeners() {
     // Date range selector
     document.getElementById('date-range-selector')?.addEventListener('change', (e) => {
         currentDateRange = parseInt(e.target.value);
+        unfilteredDashboardData = null; // Clear cache when date range changes
         loadDashboard();
     });
     
     // Filter buttons
     document.getElementById('apply-filters')?.addEventListener('click', applyFilters);
     document.getElementById('clear-filters')?.addEventListener('click', clearFilters);
+    
+    // Provider filter cascading (optional enhancement)
+    document.getElementById('provider-filter')?.addEventListener('change', (e) => {
+        updateServiceFilterOptions(e.target.value);
+    });
     
     // Budget settings
     document.getElementById('alert-threshold')?.addEventListener('input', (e) => {
@@ -132,14 +139,11 @@ async function loadDashboard() {
         // Fetch dashboard data
         const data = await getDashboardData(currentDateRange);
         
-        // Update cost summary cards
-        document.getElementById('total-cost').textContent = formatCurrency(data.totalCost);
-        document.getElementById('aws-cost').textContent = formatCurrency(data.awsCost);
-        document.getElementById('azure-cost').textContent = formatCurrency(data.azureCost);
+        // Cache the unfiltered data for filtering
+        unfilteredDashboardData = data;
         
-        // Calculate potential savings (estimate 15% of total)
-        const potentialSavings = data.totalCost * 0.15;
-        document.getElementById('potential-savings').textContent = formatCurrency(potentialSavings);
+        // Update UI
+        updateDashboardUI(data);
         
         // Update cost period display
         document.querySelectorAll('.cost-period').forEach(el => {
@@ -148,9 +152,6 @@ async function loadDashboard() {
         
         // Populate filters
         await populateFilters(data.services, data.providers);
-        
-        // Render trend chart
-        renderTrendChart(data.trendData);
         
     } catch (error) {
         console.error('Error loading dashboard:', error);
@@ -226,22 +227,179 @@ async function populateFilters(services = null, providers = null) {
     }
 }
 
-// Apply filters (placeholder - will filter data when implemented)
-function applyFilters() {
-    const providerId = document.getElementById('provider-filter').value;
-    const serviceId = document.getElementById('service-filter').value;
-    const clientId = document.getElementById('client-filter').value;
+// Apply filters - FULL IMPLEMENTATION
+async function applyFilters() {
+    try {
+        hideError();
+        
+        const providerId = document.getElementById('provider-filter').value;
+        const serviceId = document.getElementById('service-filter').value;
+        const clientId = document.getElementById('client-filter').value;
+        
+        console.log('Applying filters:', { providerId, serviceId, clientId });
+        
+        // If no filters selected, reload full dashboard
+        if (!providerId && !serviceId && !clientId) {
+            await loadDashboard();
+            return;
+        }
+        
+        // Get the unfiltered data if we don't have it
+        if (!unfilteredDashboardData) {
+            unfilteredDashboardData = await getDashboardData(currentDateRange);
+        }
+        
+        // Filter the usages array based on selected filters
+        let filteredUsages = unfilteredDashboardData.usages;
+        
+        // Filter by client
+        if (clientId) {
+            filteredUsages = filteredUsages.filter(u => u.client_id === parseInt(clientId));
+        }
+        
+        // Filter by service (and implicitly by provider since services belong to providers)
+        if (serviceId) {
+            filteredUsages = filteredUsages.filter(u => u.service_id === parseInt(serviceId));
+        } else if (providerId) {
+            // If no service selected but provider is selected, filter by provider
+            const providerServices = unfilteredDashboardData.services
+                .filter(s => s.provider_id === parseInt(providerId))
+                .map(s => s.service_id);
+            filteredUsages = filteredUsages.filter(u => providerServices.includes(u.service_id));
+        }
+        
+        // If no results after filtering, show message
+        if (filteredUsages.length === 0) {
+            showError('No data found for the selected filters. Try different filter combinations.');
+            return;
+        }
+        
+        // Recalculate costs from filtered data
+        const filteredData = calculateDashboardMetrics(
+            filteredUsages, 
+            unfilteredDashboardData.services, 
+            unfilteredDashboardData.providers
+        );
+        
+        // Update the UI with filtered data
+        updateDashboardUI(filteredData);
+        
+        console.log(`Filtered to ${filteredUsages.length} usage records out of ${unfilteredDashboardData.usages.length} total`);
+        
+    } catch (error) {
+        console.error('Error applying filters:', error);
+        showError('Failed to apply filters. Please try again.');
+    }
+}
+
+// Calculate dashboard metrics from filtered usages
+function calculateDashboardMetrics(usages, services, providers) {
+    // Calculate total cost
+    const totalCost = usages.reduce((sum, u) => sum + u.total_cost, 0);
     
-    console.log('Applying filters:', { providerId, serviceId, clientId });
+    // Calculate by provider
+    const costsByProvider = {};
+    usages.forEach(usage => {
+        const service = services.find(s => s.service_id === usage.service_id);
+        if (service) {
+            const providerId = service.provider_id;
+            if (!costsByProvider[providerId]) {
+                costsByProvider[providerId] = 0;
+            }
+            costsByProvider[providerId] += usage.total_cost;
+        }
+    });
     
-    // TODO: Implement actual filtering logic
-    showError('Filtering functionality coming soon!');
+    // Group by date for trend chart
+    const costsByDate = {};
+    usages.forEach(usage => {
+        const date = usage.usage_date;
+        if (!costsByDate[date]) {
+            costsByDate[date] = { date, total: 0, aws: 0, azure: 0 };
+        }
+        
+        const service = services.find(s => s.service_id === usage.service_id);
+        if (service) {
+            costsByDate[date].total += usage.total_cost;
+            if (service.provider_id === PROVIDER_IDS.AWS) {
+                costsByDate[date].aws += usage.total_cost;
+            } else if (service.provider_id === PROVIDER_IDS.AZURE) {
+                costsByDate[date].azure += usage.total_cost;
+            }
+        }
+    });
+    
+    const trendData = Object.values(costsByDate).sort((a, b) => 
+        a.date.localeCompare(b.date)
+    );
+    
+    return {
+        totalCost,
+        awsCost: costsByProvider[PROVIDER_IDS.AWS] || 0,
+        azureCost: costsByProvider[PROVIDER_IDS.AZURE] || 0,
+        trendData,
+        usages,
+        services,
+        providers,
+    };
+}
+
+// Update UI without re-fetching data
+function updateDashboardUI(data) {
+    // Update cost summary cards
+    document.getElementById('total-cost').textContent = formatCurrency(data.totalCost);
+    document.getElementById('aws-cost').textContent = formatCurrency(data.awsCost);
+    document.getElementById('azure-cost').textContent = formatCurrency(data.azureCost);
+    
+    // Update potential savings (estimate 15% of total)
+    const potentialSavings = data.totalCost * 0.15;
+    document.getElementById('potential-savings').textContent = formatCurrency(potentialSavings);
+    
+    // Re-render trend chart with filtered data
+    renderTrendChart(data.trendData);
+}
+
+// Update service filter options based on selected provider (cascading filter)
+function updateServiceFilterOptions(providerId) {
+    const serviceFilter = document.getElementById('service-filter');
+    if (!serviceFilter || !unfilteredDashboardData) return;
+    
+    const services = unfilteredDashboardData.services;
+    
+    // Filter services by provider if one is selected
+    const filteredServices = providerId 
+        ? services.filter(s => s.provider_id === parseInt(providerId))
+        : services;
+    
+    // Rebuild the service dropdown
+    serviceFilter.innerHTML = '<option value="">All Services</option>';
+    
+    if (filteredServices.length > 0) {
+        const servicesByType = groupBy(filteredServices, 'service_type');
+        Object.keys(servicesByType).sort().forEach(type => {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = type;
+            
+            servicesByType[type].forEach(service => {
+                const option = document.createElement('option');
+                option.value = service.service_id;
+                option.textContent = service.service_name;
+                optgroup.appendChild(option);
+            });
+            
+            serviceFilter.appendChild(optgroup);
+        });
+    }
 }
 
 function clearFilters() {
     document.getElementById('provider-filter').value = '';
     document.getElementById('service-filter').value = '';
     document.getElementById('client-filter').value = '';
+    
+    // Clear the cached unfiltered data to force fresh load
+    unfilteredDashboardData = null;
+    
     loadDashboard();
 }
 
