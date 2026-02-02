@@ -6,6 +6,11 @@ let dashboardChart = null;
 let currentDateRange = 30;
 let unfilteredDashboardData = null; // Cache for filtering
 
+// Global state for waste alerts sorting
+let wasteAlertsData = [];
+let currentSortColumn = 'potential_savings'; // Default sort by savings (high to low)
+let currentSortDirection = 'desc';
+
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', initApp);
 
@@ -517,7 +522,7 @@ function renderTrendChart(trendData) {
     });
 }
 
-// Load Waste Alerts
+// Load Waste Alerts with sorting
 async function loadWasteAlerts() {
     try {
         hideError();
@@ -531,27 +536,131 @@ async function loadWasteAlerts() {
             return;
         }
         
-        alertsBody.innerHTML = '';
-        alerts.forEach(alert => {
-            const row = document.createElement('tr');
-            
-            const utilizationClass = alert.utilization < 0.2 ? 'utilization-low' : 'utilization-medium';
-            
-            row.innerHTML = `
-                <td>${alert.service_name}</td>
-                <td>${alert.provider_name}</td>
-                <td>Multiple</td>
-                <td><span class="utilization-badge ${utilizationClass}">${formatPercentage(alert.utilization)}</span></td>
-                <td>${formatCurrency(alert.daily_cost)}</td>
-                <td style="color: var(--success-color); font-weight: 600;">${formatCurrency(alert.potential_savings)}/mo</td>
-                <td><button class="btn-action">View Details</button></td>
-            `;
-            
-            alertsBody.appendChild(row);
-        });
+        // Store alerts data globally for sorting
+        wasteAlertsData = alerts;
+        
+        // Setup sort handlers (only once)
+        setupWasteAlertsSorting();
+        
+        // Render with default sort
+        renderWasteAlertsTable(wasteAlertsData);
+        
     } catch (error) {
         console.error('Error loading waste alerts:', error);
         showError('Failed to load waste alerts. Please try again.', loadWasteAlerts);
+    }
+}
+
+// Setup sorting click handlers
+function setupWasteAlertsSorting() {
+    const sortableHeaders = document.querySelectorAll('.alerts-table .sortable');
+    
+    // Remove existing listeners to avoid duplicates
+    sortableHeaders.forEach(header => {
+        const newHeader = header.cloneNode(true);
+        header.parentNode.replaceChild(newHeader, header);
+    });
+    
+    // Add new listeners
+    document.querySelectorAll('.alerts-table .sortable').forEach(header => {
+        header.addEventListener('click', () => {
+            const sortColumn = header.dataset.sort;
+            
+            // Toggle direction if clicking same column
+            if (sortColumn === currentSortColumn) {
+                currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                // New column - default to descending for numbers, ascending for text
+                currentSortColumn = sortColumn;
+                currentSortDirection = ['service_name', 'provider_name'].includes(sortColumn) ? 'asc' : 'desc';
+            }
+            
+            // Sort and re-render
+            const sortedData = sortWasteAlerts(wasteAlertsData, currentSortColumn, currentSortDirection);
+            renderWasteAlertsTable(sortedData);
+            updateSortIndicators();
+        });
+    });
+    
+    // Set initial sort indicators
+    updateSortIndicators();
+}
+
+// Sort waste alerts by column
+function sortWasteAlerts(alerts, column, direction) {
+    const sorted = [...alerts].sort((a, b) => {
+        let valA, valB;
+        
+        switch (column) {
+            case 'service_name':
+            case 'provider_name':
+                valA = a[column].toLowerCase();
+                valB = b[column].toLowerCase();
+                return direction === 'asc' 
+                    ? valA.localeCompare(valB)
+                    : valB.localeCompare(valA);
+            
+            case 'utilization':
+            case 'daily_cost':
+            case 'potential_savings':
+                valA = a[column];
+                valB = b[column];
+                return direction === 'asc' 
+                    ? valA - valB
+                    : valB - valA;
+            
+            default:
+                return 0;
+        }
+    });
+    
+    return sorted;
+}
+
+// Update sort indicator arrows
+function updateSortIndicators() {
+    // Remove all sorted classes
+    document.querySelectorAll('.alerts-table .sortable').forEach(header => {
+        header.classList.remove('sorted', 'asc', 'desc');
+    });
+    
+    // Add sorted class to current column
+    const currentHeader = document.querySelector(`.alerts-table .sortable[data-sort="${currentSortColumn}"]`);
+    if (currentHeader) {
+        currentHeader.classList.add('sorted', currentSortDirection);
+    }
+}
+
+// Render waste alerts table
+function renderWasteAlertsTable(alerts) {
+    const alertsBody = document.getElementById('waste-alerts-body');
+    alertsBody.innerHTML = '';
+    
+    alerts.forEach(alert => {
+        const row = document.createElement('tr');
+        
+        const utilizationClass = alert.utilization < 0.2 ? 'utilization-low' : 'utilization-medium';
+        
+        row.innerHTML = `
+            <td>${alert.service_name}</td>
+            <td>${alert.provider_name}</td>
+            <td>Multiple</td>
+            <td><span class="utilization-badge ${utilizationClass}">${formatPercentage(alert.utilization)}</span></td>
+            <td>${formatCurrency(alert.daily_cost)}</td>
+            <td style="color: var(--success-color); font-weight: 600;">${formatCurrency(alert.potential_savings)}/mo</td>
+            <td><button class="btn-action" onclick="viewWasteAlertDetails(${alert.service_id})">View Details</button></td>
+        `;
+        
+        alertsBody.appendChild(row);
+    });
+}
+
+// Placeholder for details view (Phase II Priority 2 if needed)
+function viewWasteAlertDetails(serviceId) {
+    const alert = wasteAlertsData.find(a => a.service_id === serviceId);
+    if (alert) {
+        console.log('View details for:', alert);
+        showError(`Details view: ${alert.service_name} - ${formatPercentage(alert.utilization)} utilization, save ${formatCurrency(alert.potential_savings)}/month`);
     }
 }
 

@@ -717,3 +717,51 @@ button {
         font-size: var(--font-size-lg);
     }
 }
+
+/* Sortable table headers */
+.sortable {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    padding-right: 1.5rem !important;
+}
+
+.sortable:hover {
+    background-color: #e2e8f0;
+}
+
+.sort-indicator {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.75rem;
+    width: 1rem;
+    height: 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sortable .sort-indicator {
+    color: var(--text-secondary);
+    opacity: 0.3;
+}
+
+.sortable .sort-indicator::after {
+    content: "⇅"; /* Default unsorted icon */
+}
+
+.sortable.sorted .sort-indicator {
+    opacity: 1;
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+.sortable.sorted.asc .sort-indicator::after {
+    content: "▲";
+}
+
+.sortable.sorted.desc .sort-indicator::after {
+    content: "▼";
+}
