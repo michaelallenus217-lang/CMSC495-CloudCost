@@ -1,3 +1,13 @@
+"""
+File: test_health.py
+Project: Cloud Cost Intelligence Platform
+Author: Bryana Henderson (Test Lead), Michael Allen (PM)
+Created: February 2026
+Test ID: T-001
+Description: Health check endpoint test. Verifies API server is running
+             and responding with status 'ok'.
+"""
+
 import requests
 from conftest import BASE_URL, assert_json_response, TIMEOUT
 

@@ -1,3 +1,13 @@
+"""
+File: test_single_client.py
+Project: Cloud Cost Intelligence Platform
+Author: Bryana Henderson (Test Lead), Michael Allen (PM)
+Created: February 2026
+Test ID: T-004
+Description: Single client endpoint test. Verifies /clients/{id} returns
+             a single client record by ID.
+"""
+
 import requests
 from conftest import BASE_URL, assert_json_response, TIMEOUT
 

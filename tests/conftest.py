@@ -1,3 +1,12 @@
+"""
+File: conftest.py
+Project: Cloud Cost Intelligence Platform
+Author: Bryana Henderson (Test Lead), Michael Allen (PM)
+Created: February 2026
+Description: Shared test fixtures. Provides API base URL, database warmup
+             routine for Azure SQL cold start, and JSON response assertions.
+"""
+
 import pytest
 import requests
 import time

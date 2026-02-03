@@ -1,3 +1,13 @@
+"""
+File: test_services.py
+Project: Cloud Cost Intelligence Platform
+Author: Bryana Henderson (Test Lead), Michael Allen (PM)
+Created: February 2026
+Test ID: T-006
+Description: Services endpoint test. Verifies /services returns list of
+             cloud service records with pricing information.
+"""
+
 import requests
 from conftest import BASE_URL, assert_json_response, TIMEOUT
 

@@ -1,3 +1,13 @@
+"""
+File: test_invoices.py
+Project: Cloud Cost Intelligence Platform
+Author: Bryana Henderson (Test Lead), Michael Allen (PM)
+Created: February 2026
+Test ID: T-009
+Description: Invoices endpoint test. Verifies /invoices returns list of
+             invoice records for billing and cost reporting.
+"""
+
 import requests
 from conftest import BASE_URL, assert_json_response, TIMEOUT
 

@@ -1,3 +1,13 @@
+"""
+File: test_providers.py
+Project: Cloud Cost Intelligence Platform
+Author: Bryana Henderson (Test Lead), Michael Allen (PM)
+Created: February 2026
+Test ID: T-005
+Description: Providers endpoint test. Verifies /providers returns list of
+             cloud provider records (AWS, Azure, Google Cloud).
+"""
+
 import requests
 from conftest import BASE_URL, assert_json_response, TIMEOUT
 

@@ -1,3 +1,13 @@
+"""
+File: test_usages.py
+Project: Cloud Cost Intelligence Platform
+Author: Bryana Henderson (Test Lead), Michael Allen (PM)
+Created: February 2026
+Test ID: T-007
+Description: Usages endpoint test. Verifies /usages returns list of
+             usage records tracking client cloud consumption.
+"""
+
 import requests
 from conftest import BASE_URL, assert_json_response, TIMEOUT
 
