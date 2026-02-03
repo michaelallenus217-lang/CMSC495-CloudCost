@@ -1,3 +1,12 @@
+/**
+ * File: style.css
+ * Project: Cloud Cost Intelligence Platform
+ * Author: Ishan (Frontend Lead)
+ * Created: January 2026
+ * Description: Main stylesheet for dashboard UI. Defines layout, typography,
+ *              color scheme, and responsive design for cost visualization.
+ */
+
 /* CSS Reset & Base Styles */
 * {
     margin: 0;

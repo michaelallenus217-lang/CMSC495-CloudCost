@@ -1,3 +1,12 @@
+"""
+File: clients.py
+Project: Cloud Cost Intelligence Platform
+Author: Sean Kellner (Backend Lead)
+Created: January 2026
+Description: Clients API endpoint. Returns client records and supports
+             single client lookup by ID.
+"""
+
 from flask import jsonify, request
 from sqlalchemy import text
 from backend.db.session import get_db_session

@@ -1,3 +1,12 @@
+"""
+File: providers.py
+Project: Cloud Cost Intelligence Platform
+Author: Sean Kellner (Backend Lead)
+Created: January 2026
+Description: Providers API endpoint. Returns cloud provider records
+             (AWS, Azure, Google Cloud).
+"""
+
 from flask import jsonify, request
 from sqlalchemy import text
 from backend.db.session import get_db_session

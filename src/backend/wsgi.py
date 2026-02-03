@@ -1,3 +1,12 @@
+"""
+File: wsgi.py
+Project: Cloud Cost Intelligence Platform
+Author: Sean Kellner (Backend Lead)
+Created: January 2026
+Description: WSGI entry point. Initializes Flask app and runs development
+             server with configurable host, port, and debug mode.
+"""
+
 import os
 from backend import create_app
 

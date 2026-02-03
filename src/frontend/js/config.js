@@ -1,3 +1,12 @@
+/**
+ * File: config.js
+ * Project: Cloud Cost Intelligence Platform
+ * Author: Ishan (Frontend Lead)
+ * Created: January 2026
+ * Description: Frontend configuration. Defines API base URL and
+ *              environment-specific settings.
+ */
+
 // API Configuration (Global namespace)
 const API_CONFIG = {
     BASE_URL: 'http://localhost:5000',

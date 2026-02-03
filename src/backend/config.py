@@ -1,3 +1,12 @@
+"""
+File: config.py
+Project: Cloud Cost Intelligence Platform
+Author: Sean Kellner (Backend Lead)
+Created: January 2026
+Description: Application configuration settings. Loads environment variables
+             for database connection, CORS origins, and Flask settings.
+"""
+
 import os
 
 class BaseConfig:

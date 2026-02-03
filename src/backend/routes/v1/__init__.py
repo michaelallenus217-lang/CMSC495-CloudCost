@@ -1,3 +1,11 @@
+"""
+File: __init__.py
+Project: Cloud Cost Intelligence Platform
+Author: Sean Kellner (Backend Lead)
+Created: January 2026
+Description: API v1 blueprint initialization. Registers all v1 endpoint routes.
+"""
+
 from flask import Blueprint
 
 api_v1_bp = Blueprint("api_v1", __name__, url_prefix="/api/v1")

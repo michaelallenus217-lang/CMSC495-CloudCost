@@ -1,3 +1,12 @@
+"""
+File: session.py
+Project: Cloud Cost Intelligence Platform
+Author: Sean Kellner (Backend Lead)
+Created: January 2026
+Description: Database session management. Provides scoped session factory
+             for SQLAlchemy database operations.
+"""
+
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 

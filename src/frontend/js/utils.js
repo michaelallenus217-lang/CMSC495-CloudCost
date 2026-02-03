@@ -1,3 +1,12 @@
+/**
+ * File: utils.js
+ * Project: Cloud Cost Intelligence Platform
+ * Author: Ishan (Frontend Lead)
+ * Created: January 2026
+ * Description: Utility functions. Provides formatting helpers for currency,
+ *              dates, and data transformations used across the frontend.
+ */
+
 // Date formatting utilities
 function formatDate(dateString) {
     if (!dateString) return 'N/A';

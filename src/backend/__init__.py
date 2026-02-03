@@ -1,3 +1,12 @@
+"""
+File: __init__.py
+Project: Cloud Cost Intelligence Platform
+Author: Sean Kellner (Backend Lead)
+Created: January 2026
+Description: Flask application factory. Initializes app, registers blueprints, 
+             configures CORS, and establishes database connection.
+"""
+
 from pathlib import Path
 from dotenv import load_dotenv
 from flask import Flask

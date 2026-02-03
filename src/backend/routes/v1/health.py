@@ -1,3 +1,12 @@
+"""
+File: health.py
+Project: Cloud Cost Intelligence Platform
+Author: Sean Kellner (Backend Lead)
+Created: January 2026
+Description: Health check endpoints. Returns API status and database
+             connectivity status for monitoring and testing.
+"""
+
 from flask import jsonify
 from sqlalchemy import text
 from backend.db.session import get_db_session

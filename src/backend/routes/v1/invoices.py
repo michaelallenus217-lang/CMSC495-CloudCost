@@ -1,3 +1,12 @@
+"""
+File: invoices.py
+Project: Cloud Cost Intelligence Platform
+Author: Sean Kellner (Backend Lead)
+Created: January 2026
+Description: Invoices API endpoint. Returns invoice records for billing
+             and cost reporting.
+"""
+
 from flask import jsonify, request
 from sqlalchemy import text
 from backend.db.session import get_db_session

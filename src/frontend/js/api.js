@@ -1,3 +1,12 @@
+/**
+ * File: api.js
+ * Project: Cloud Cost Intelligence Platform
+ * Author: Ishan (Frontend Lead)
+ * Created: January 2026
+ * Description: API client module. Handles all backend communication,
+ *              includes mock data fallback for offline development.
+ */
+
 // API Layer with Mock Data Fallback (Global namespace)
 
 // Mock data generator for development

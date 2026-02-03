@@ -1,3 +1,12 @@
+/**
+ * File: dashboard.js
+ * Project: Cloud Cost Intelligence Platform
+ * Author: Ishan (Frontend Lead)
+ * Created: January 2026
+ * Description: Main dashboard logic. Initializes charts, handles user
+ *              interactions, and renders cost data visualizations.
+ */
+
 // Main Dashboard Logic & Chart.js Integration (uses global functions from other files)
 
 // Global state

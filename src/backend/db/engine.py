@@ -1,3 +1,12 @@
+"""
+File: engine.py
+Project: Cloud Cost Intelligence Platform
+Author: Tony (Database Lead), Sean Kellner (Backend Lead)
+Created: January 2026
+Description: SQLAlchemy engine configuration. Handles Azure SQL connection
+             with Microsoft Entra authentication and device code flow.
+"""
+
 import os
 import sys
 import struct
