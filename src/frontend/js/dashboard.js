@@ -129,7 +129,7 @@ function setupEventListeners() {
         document.getElementById('threshold-value').textContent = e.target.value + '%';
     });
     
-    document.getElementById('save-settings')?.addEventListener('click', saveBudgetSettings);
+    document.getElementById('save-settings')?.addEventListener('click', handleSaveBudgetSettings);
     document.getElementById('cancel-settings')?.addEventListener('click', () => {
         navigateToPage('dashboard');
     });
@@ -724,8 +724,8 @@ async function loadSettings() {
     }
 }
 
-// Save Budget Settings
-async function saveBudgetSettings() {
+// Save Budget Settings (Event Handler)
+async function handleSaveBudgetSettings() {
     try {
         const clientId = document.getElementById('client-select').value;
         const budgetAmount = parseFloat(document.getElementById('budget-amount').value);
@@ -757,7 +757,8 @@ async function saveBudgetSettings() {
             alert_enabled: alertEnabled,
         };
         
-        const result = await saveBudgetSettings(budgetData);
+        // Call the API function from api.js (not this function!)
+        const result = await window.saveBudgetSettings(budgetData);
         
         if (result.status === 'ok') {
             alert('Budget settings saved successfully!');
@@ -818,8 +819,134 @@ async function exportData(format) {
                 progressDiv.classList.add('hidden');
             }, 2000);
         } else if (format === 'pdf') {
-            showError('PDF export coming soon!');
-            progressDiv.classList.add('hidden');
+            // PDF Export Implementation
+            progressFill.style.width = '70%';
+            progressText.textContent = 'Generating PDF...';
+            
+            try {
+                // Access jsPDF from window
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                // Title
+                doc.setFontSize(20);
+                doc.setTextColor(40, 40, 40);
+                doc.text('Cloud Cost Intelligence Report', 14, 22);
+                
+                // Date range and generation info
+                doc.setFontSize(10);
+                doc.setTextColor(100, 100, 100);
+                doc.text(`Date Range: Last ${dateRange} days`, 14, 30);
+                doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 35);
+                
+                // Summary Section
+                doc.setFontSize(14);
+                doc.setTextColor(40, 40, 40);
+                doc.text('Cost Summary', 14, 45);
+                
+                // Summary table
+                const summaryData = [
+                    ['Total Spend', formatCurrency(data.totalCost)],
+                    ['AWS Costs', formatCurrency(data.awsCost)],
+                    ['Azure Costs', formatCurrency(data.azureCost)],
+                ];
+                
+                doc.autoTable({
+                    startY: 50,
+                    head: [['Metric', 'Amount']],
+                    body: summaryData,
+                    theme: 'striped',
+                    headStyles: { fillColor: [37, 99, 235] },
+                    margin: { left: 14 },
+                });
+                
+                // Usage Details Section
+                let finalY = doc.lastAutoTable.finalY + 10;
+                doc.setFontSize(14);
+                doc.text('Usage Details', 14, finalY);
+                
+                // Prepare usage data for table
+                const usageTableData = data.usages.slice(0, 50).map(u => {
+                    const service = data.services.find(s => s.service_id === u.service_id);
+                    const provider = data.providers.find(p => p.provider_id === service?.provider_id);
+                    
+                    return [
+                        u.usage_date,
+                        provider?.provider_name || 'Unknown',
+                        service?.service_name || 'Unknown',
+                        u.units_used.toFixed(2),
+                        formatCurrency(u.total_cost),
+                    ];
+                });
+                
+                doc.autoTable({
+                    startY: finalY + 5,
+                    head: [['Date', 'Provider', 'Service', 'Units Used', 'Cost']],
+                    body: usageTableData,
+                    theme: 'grid',
+                    headStyles: { fillColor: [37, 99, 235] },
+                    styles: { fontSize: 8 },
+                    columnStyles: {
+                        0: { cellWidth: 25 },
+                        1: { cellWidth: 25 },
+                        2: { cellWidth: 60 },
+                        3: { cellWidth: 25 },
+                        4: { cellWidth: 25 },
+                    },
+                    margin: { left: 14, right: 14 },
+                });
+                
+                // Provider Breakdown (if space allows)
+                finalY = doc.lastAutoTable.finalY + 10;
+                if (finalY < 250) {
+                    doc.setFontSize(14);
+                    doc.text('Provider Breakdown', 14, finalY);
+                    
+                    const providerData = [
+                        ['AWS', formatCurrency(data.awsCost), `${((data.awsCost / data.totalCost) * 100).toFixed(1)}%`],
+                        ['Azure', formatCurrency(data.azureCost), `${((data.azureCost / data.totalCost) * 100).toFixed(1)}%`],
+                    ];
+                    
+                    doc.autoTable({
+                        startY: finalY + 5,
+                        head: [['Provider', 'Total Cost', 'Percentage']],
+                        body: providerData,
+                        theme: 'striped',
+                        headStyles: { fillColor: [37, 99, 235] },
+                        margin: { left: 14 },
+                    });
+                }
+                
+                // Footer
+                const pageCount = doc.internal.getNumberOfPages();
+                for (let i = 1; i <= pageCount; i++) {
+                    doc.setPage(i);
+                    doc.setFontSize(8);
+                    doc.setTextColor(150);
+                    doc.text(
+                        `Page ${i} of ${pageCount} | Cloud Cost Intelligence Platform | © 2026 The Code Collective`,
+                        doc.internal.pageSize.getWidth() / 2,
+                        doc.internal.pageSize.getHeight() - 10,
+                        { align: 'center' }
+                    );
+                }
+                
+                progressFill.style.width = '100%';
+                progressText.textContent = 'Download starting...';
+                
+                // Save the PDF
+                doc.save(`cloud-costs-report-${dateRange}days-${new Date().toISOString().split('T')[0]}.pdf`);
+                
+                setTimeout(() => {
+                    progressDiv.classList.add('hidden');
+                    progressText.textContent = 'Export complete!';
+                }, 2000);
+                
+            } catch (pdfError) {
+                console.error('PDF generation error:', pdfError);
+                showError('Failed to generate PDF. Please try again.');
+                progressDiv.classList.add('hidden');
+            }
         }
     } catch (error) {
         console.error('Error exporting data:', error);
