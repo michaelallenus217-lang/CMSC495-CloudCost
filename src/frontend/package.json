@@ -1,0 +1,16 @@
+{
+  "name": "cloud-cost-frontend",
+  "version": "1.0.0",
+  "description": "Cloud Cost Intelligence Platform Frontend",
+  "scripts": {
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "test:watch": "jest --watch"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "jsdom": "^26.0.0"
+  }
+}
