@@ -252,9 +252,14 @@ async function applyFilters() {
         
         console.log('Applying filters:', { providerId, serviceId, clientId });
         
-        // If no filters selected, reload full dashboard
+        // If no filters selected, show all data
         if (!providerId && !serviceId && !clientId) {
-            await loadDashboard();
+            console.log('No filters selected - showing all data');
+            if (unfilteredDashboardData) {
+                updateDashboardUI(unfilteredDashboardData);
+            } else {
+                await loadDashboard();
+            }
             return;
         }
         
@@ -269,17 +274,20 @@ async function applyFilters() {
         // Filter by client
         if (clientId) {
             filteredUsages = filteredUsages.filter(u => u.client_id === parseInt(clientId));
+            console.log(`Filtered by client ${clientId}: ${filteredUsages.length} records`);
         }
         
         // Filter by service (and implicitly by provider since services belong to providers)
         if (serviceId) {
             filteredUsages = filteredUsages.filter(u => u.service_id === parseInt(serviceId));
+            console.log(`Filtered by service ${serviceId}: ${filteredUsages.length} records`);
         } else if (providerId) {
             // If no service selected but provider is selected, filter by provider
             const providerServices = unfilteredDashboardData.services
                 .filter(s => s.provider_id === parseInt(providerId))
                 .map(s => s.service_id);
             filteredUsages = filteredUsages.filter(u => providerServices.includes(u.service_id));
+            console.log(`Filtered by provider ${providerId}: ${filteredUsages.length} records`);
         }
         
         // If no results after filtering, show message
@@ -298,7 +306,8 @@ async function applyFilters() {
         // Update the UI with filtered data
         updateDashboardUI(filteredData);
         
-        console.log(`Filtered to ${filteredUsages.length} usage records out of ${unfilteredDashboardData.usages.length} total`);
+        console.log(`✓ Filters applied: Showing ${filteredUsages.length} of ${unfilteredDashboardData.usages.length} total records`);
+        console.log(`Total Cost: ${formatCurrency(filteredData.totalCost)} (was ${formatCurrency(unfilteredDashboardData.totalCost)})`);
         
     } catch (error) {
         console.error('Error applying filters:', error);
@@ -407,14 +416,22 @@ function updateServiceFilterOptions(providerId) {
 }
 
 function clearFilters() {
+    // Reset filter dropdowns to default
     document.getElementById('provider-filter').value = '';
     document.getElementById('service-filter').value = '';
     document.getElementById('client-filter').value = '';
     
-    // Clear the cached unfiltered data to force fresh load
-    unfilteredDashboardData = null;
+    // Reset service filter options to show all services
+    updateServiceFilterOptions('');
     
-    loadDashboard();
+    // Re-render dashboard with unfiltered data
+    if (unfilteredDashboardData) {
+        updateDashboardUI(unfilteredDashboardData);
+        console.log('Filters cleared - showing all data');
+    } else {
+        // If we don't have cached data, reload
+        loadDashboard();
+    }
 }
 
 // Render Trend Chart using Chart.js
