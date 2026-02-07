@@ -33,10 +33,10 @@ class TestTCU006:
         assert response.status_code == 200
         
         data = response.json()
-        assert "budgets" in data
+        assert "budgets" in data.get("data", {})
         
-        if len(data["budgets"]) > 0:
-            budget = data["budgets"][0]
+        if len(data["data"]["budgets"]) > 0:
+            budget = data["data"]["budgets"][0]
             missing = [f for f in self.EXPECTED_FIELDS if f not in budget]
             
             if verbose:

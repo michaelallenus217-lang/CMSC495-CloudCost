@@ -17,4 +17,4 @@ def test_budgets_returns_list():
     assert_json_response(response)
     data = response.json()
     assert data.get("status") == "ok"
-    assert isinstance(data.get("budgets"), list)
+    assert isinstance(data.get("data", {}).get("budgets"), list)
