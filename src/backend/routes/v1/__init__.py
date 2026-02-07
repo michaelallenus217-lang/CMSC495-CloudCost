@@ -7,8 +7,10 @@ Description: API v1 blueprint initialization. Registers all v1 endpoint routes.
 """
 
 from flask import Blueprint
-
 api_v1_bp = Blueprint("api_v1", __name__, url_prefix="/api/v1")
+
+from backend.api_http.error_handlers import register_error_handlers
+register_error_handlers(api_v1_bp)
 
 # Import route modules so they register handlers on api_v1_bp.
 from backend.routes.v1 import budgets

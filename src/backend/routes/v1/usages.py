@@ -9,28 +9,18 @@ Description: Usages API endpoint. Returns usage records tracking client
 
 from flask import jsonify, request
 from sqlalchemy import text
+from typing import cast
 from backend.db.session import get_db_session
 from backend.routes.v1 import api_v1_bp
+from backend.api_http.schemas import PagingSchema
+from backend.api_http.responses import ok
 
 @api_v1_bp.get("/usages")
 def get_usages():
-    limit_param = request.args.get("limit", "10")
-
-    try:
-        limit = int(limit_param)
-    except ValueError:
-        return jsonify({"error": "limit must be an integer"}), 400
-
-    if limit < 1:
-        return jsonify({"error": "limit must be >= 1"}), 400
-    
-    if limit > 100:
-        # Don't allow limits greter than 100
-        limit = 100
-    
+    args = cast(dict[str, int], PagingSchema().load(request.args))
+    limit = args["limit"]
 
     db = get_db_session()
-
     rows = db.execute(
         text(
             """
