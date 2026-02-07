@@ -13,7 +13,6 @@ from decimal import Decimal
 from conftest import BASE_URL, TIMEOUT
 
 @pytest.mark.unit
-@pytest.mark.xfail(reason="DEF-001: Unmapped service costs - data integrity issue")
 class TestTCU003:
     """TC-U-003: Verify cost calculation correctly sums provider spending"""
     
@@ -89,7 +88,7 @@ class TestTCU003:
         if verbose:
             print("\n  Step 2: Get services with provider mapping")
         
-        services_resp = requests.get(f"{BASE_URL}/services", timeout=TIMEOUT)
+        services_resp = requests.get(f"{BASE_URL}/services?limit=100", timeout=TIMEOUT)
         assert services_resp.status_code == 200
         services = {s["service_id"]: s["provider_id"] for s in services_resp.json()["services"]}
         

@@ -35,7 +35,7 @@ class TestE2EFR01:
         providers_resp = requests.get(f"{API_URL}/providers", timeout=30)
         providers = {p["provider_id"]: p["provider_name"] for p in providers_resp.json()["providers"]}
         
-        services_resp = requests.get(f"{API_URL}/services", timeout=30)
+        services_resp = requests.get(f"{API_URL}/services?limit=100", timeout=30)
         service_to_provider = {s["service_id"]: s["provider_id"] for s in services_resp.json()["services"]}
         
         usages_resp = requests.get(f"{API_URL}/usages", timeout=30)
