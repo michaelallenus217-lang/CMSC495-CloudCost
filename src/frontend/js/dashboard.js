@@ -111,6 +111,7 @@ function setupEventListeners() {
     // Date range selector
     document.getElementById('date-range-selector')?.addEventListener('change', (e) => {
         currentDateRange = parseInt(e.target.value);
+        document.getElementById('export-date-range').value = currentDateRange;
         unfilteredDashboardData = null; // Clear cache when date range changes
         loadDashboard();
     });
