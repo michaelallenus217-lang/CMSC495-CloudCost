@@ -3,8 +3,10 @@
  * Project: Cloud Cost Intelligence Platform
  * Author: Ishan (Frontend Lead)
  * Created: January 2026
+ * Updated: February 2026 - Added response transformer for backend integration
  * Description: API client module. Handles all backend communication,
  *              includes mock data fallback for offline development.
+ *              Now includes type coercion for numeric fields from backend.
  */
 
 // API Layer with Mock Data Fallback (Global namespace)
@@ -95,7 +97,129 @@ const MOCK_DATA = {
     ],
 };
 
-// Generic API fetch function
+/**
+ * Response Transformer - Converts backend string numeric values to JavaScript numbers
+ * 
+ * Backend intentionally sends DECIMAL fields as strings to preserve precision over JSON.
+ * Frontend needs to cast these to floats for calculations and display.
+ * 
+ * This function handles type coercion for all numeric fields across all API endpoints.
+ * It's idempotent - works whether backend sends strings or numbers.
+ */
+function transformBackendResponse(data) {
+    if (!data) return data;
+    
+    // Handle single object response (e.g., GET /clients/1)
+    if (!Array.isArray(data) && typeof data === 'object') {
+        return transformSingleItem(data);
+    }
+    
+    // Handle array response wrapped in API format
+    if (data.status === 'ok') {
+        // Find the resource array (clients, services, usages, etc.)
+        const resourceKeys = Object.keys(data).filter(key => 
+            key !== 'status' && key !== 'count' && Array.isArray(data[key])
+        );
+        
+        if (resourceKeys.length > 0) {
+            const resourceKey = resourceKeys[0];
+            data[resourceKey] = data[resourceKey].map(item => transformSingleItem(item));
+        }
+    }
+    
+    return data;
+}
+
+/**
+ * Transform a single item - converts string numeric fields to numbers
+ */
+function transformSingleItem(item) {
+    if (!item || typeof item !== 'object') return item;
+    
+    const transformed = { ...item };
+    
+    // Numeric fields that need conversion
+    const numericFields = [
+        // Usage fields
+        'units_used',
+        'total_cost',
+        
+        // Service fields
+        'service_cost',
+        
+        // Budget fields
+        'budget_amount',
+        'monthly_limit',
+        'alert_threshold',
+        
+        // Invoice fields
+        'invoice_amount',
+        
+        // ID fields (though these are usually already numbers)
+        'usage_id',
+        'client_id',
+        'service_id',
+        'provider_id',
+        'budget_id',
+        'invoice_id',
+    ];
+    
+    // Convert each numeric field
+    numericFields.forEach(field => {
+        if (field in transformed) {
+            transformed[field] = parseNumericValue(transformed[field]);
+        }
+    });
+    
+    return transformed;
+}
+
+/**
+ * Safely parse a value to number
+ * - If already a number, return as-is
+ * - If string, parse to float
+ * - If null/undefined/empty, return 0
+ */
+function parseNumericValue(value) {
+    // Already a number
+    if (typeof value === 'number') {
+        return value;
+    }
+    
+    // Null or undefined
+    if (value === null || value === undefined) {
+        return 0;
+    }
+    
+    // String - parse to float
+    if (typeof value === 'string') {
+        // Empty string
+        if (value.trim() === '') {
+            return 0;
+        }
+        
+        const parsed = parseFloat(value);
+        
+        // Check if parsing resulted in NaN
+        if (isNaN(parsed)) {
+            console.warn(`Warning: Could not parse numeric value: "${value}"`);
+            return 0;
+        }
+        
+        return parsed;
+    }
+    
+    // Boolean (edge case)
+    if (typeof value === 'boolean') {
+        return value ? 1 : 0;
+    }
+    
+    // Unknown type
+    console.warn(`Warning: Unexpected type for numeric field: ${typeof value}`);
+    return 0;
+}
+
+// Generic API fetch function with response transformation
 async function fetchFromApi(endpoint, params = {}) {
     const url = getApiUrl(endpoint, params);
     
@@ -118,7 +242,11 @@ async function fetchFromApi(endpoint, params = {}) {
         }
         
         const data = await response.json();
-        return data;
+        
+        // Transform backend response (convert string numbers to actual numbers)
+        const transformedData = transformBackendResponse(data);
+        
+        return transformedData;
     } catch (error) {
         console.error(`API Error for ${endpoint}:`, error);
         throw error;
@@ -234,7 +362,7 @@ async function getDashboardData(days = 30) {
         
         const recentUsages = usages.filter(u => u.usage_date >= cutoffStr);
         
-        // Calculate totals
+        // Calculate totals (now works correctly with numeric values!)
         const totalCost = recentUsages.reduce((sum, u) => sum + u.total_cost, 0);
         
         // Calculate by provider
