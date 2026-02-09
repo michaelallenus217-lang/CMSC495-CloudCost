@@ -7,29 +7,36 @@ Description: Clients API endpoint. Returns client records and supports
              single client lookup by ID.
 """
 
-from flask import jsonify, request
+from flask import request
 from sqlalchemy import text
 from typing import cast
 from backend.db.session import get_db_session
 from backend.routes.v1 import api_v1_bp
-from backend.api_http.schemas import PagingSchema
-from backend.api_http.responses import ok
+from backend.api_http.schemas import PagedSchema
+from backend.api_http.responses import ok_resource, ok_resource_list, error_resource_missing
 
 @api_v1_bp.get("/clients")
 def get_clients():
-    args = cast(dict[str, int], PagingSchema().load(request.args))
-    limit = args["limit"]
+    paged_args = cast(dict[str, int], PagedSchema().load(request.args))
+    limit = paged_args["limit"]
+    page = paged_args["page"]
+    offset = (page - 1) * limit
 
     db = get_db_session()
     rows = db.execute(
         text(
             """
-            SELECT TOP (:limit) ClientID, ClientName, CreatedDate
+            SELECT ClientID, ClientName, CreatedDate
             FROM Clients
-            ORDER BY CreatedDate DESC
+            ORDER BY ClientID DESC
+            OFFSET :offset ROWS
+            FETCH NEXT :limit ROWS ONLY
             """
         ),
-        {"limit": limit},
+        {
+            "limit": limit,
+            "offset": offset,
+        },
     ).fetchall()
 
     clients = []
@@ -42,7 +49,7 @@ def get_clients():
             }
         )
 
-    return jsonify({"status": "ok", "count": len(clients), "clients": clients})
+    return ok_resource_list(clients, "clients")
 
 
 @api_v1_bp.get("/clients/<int:client_id>")
@@ -59,11 +66,11 @@ def get_client(client_id: int):
     ).fetchone()
 
     if row is None:
-        return jsonify({"error": "Client not found", "client_id": client_id}), 404
+        return error_resource_missing("client", client_id)
 
     item = {
         "client_id": row.ClientID,
         "client_name": row.ClientName,
         "created_date": row.CreatedDate.isoformat() if row.CreatedDate else None,
     }
-    return jsonify(item)
+    return ok_resource(item, "client")

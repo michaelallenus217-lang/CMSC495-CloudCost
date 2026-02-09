@@ -77,53 +77,68 @@ You can simply view them in a web browser for convenience as well:
 
 ## API Endpoints (WIP)
 
-### /api/v1/health
-GET
+# API Endpoints (Summary)
 
-### /api/v1/health/db
-GET
+## Pagination
+- `limit` (int, default `10`, min `1`, max `1000`): number of items returned
+- `page` (int, default `1`, min `1`): 1-indexed page number
+
+## Date-range filtering
+- `start_date` (date `YYYY-MM-DD`, optional)
+- `end_date` (date `YYYY-MM-DD`, optional)
+- Constraint: if both provided, `start_date <= end_date`
+
+---
 
 ### /api/v1/clients
-GET
+- **GET**
+  - Query params: `limit`, `page`
 
 ### /api/v1/clients/{clientId}
-GET
+- **GET**
 
-### /api/v1/clients/{clientId}/budget
-GET
+### TODO: /api/v1/clients/{clientId}/budget
+- **GET**
+  - Query params: `limit`, `page`
 
-### /api/v1/clients/{clientId}/invoices
-GET
+### TODO: /api/v1/clients/{clientId}/invoices
+- **GET**
+  - Query params: `limit`, `page`, `start_date`, `end_date`
 
-### /api/v1/clients/{clientId}/invoices/{invoiceId}
-GET
+### TODO: /api/v1/clients/{clientId}/invoices/{invoiceId}
+- **GET**
 
-### /api/v1/clients/{clientId}/usage
-GET
+### TODO: /api/v1/clients/{clientId}/usage
+- **GET**
+  - Query params: `limit`, `page`, `start_date`, `end_date`
 
-### /api/v1/clients/{clientId}/usage/{usageId}
-GET
+### TODO: /api/v1/clients/{clientId}/usage/{usageId}
+- **GET**
 
 ### /api/v1/providers
-GET
+- **GET**
+  - Query params: `limit`, `page`
 
 ### /api/v1/providers/{providerId}
-GET
+- **GET**
 
-### /api/v1/providers/{providerId}/services
-GET
+### TODO: /api/v1/providers/{providerId}/services
+- **GET**
+  - Query params: `limit`, `page`
 
-### /api/v1/providers/{providerId}/services/{serviceId}
-GET
+### TODO: /api/v1/providers/{providerId}/services/{serviceId}
+- **GET**
 
 ### /api/v1/services
-GET
+- **GET**
+  - Query params: `limit`, `page`
 
 ### /api/v1/services/{serviceId}
-GET
+- **GET**
 
-### /api/v1/services/{serviceId}/usage
-GET
+### TODO: /api/v1/services/{serviceId}/usage
+- **GET**
+  - Query params: `limit`, `page`, `start_date`, `end_date`
 
-### /api/v1/services/{serviceId}/usage/{usageId}
-GET
+### TODO: /api/v1/services/{serviceId}/usage/{usageId}
+- **GET**

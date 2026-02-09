@@ -7,29 +7,44 @@ Description: Usages API endpoint. Returns usage records tracking client
              consumption of cloud services and associated costs.
 """
 
-from flask import jsonify, request
+from flask import request
 from sqlalchemy import text
 from typing import cast
 from backend.db.session import get_db_session
 from backend.routes.v1 import api_v1_bp
-from backend.api_http.schemas import PagingSchema
-from backend.api_http.responses import ok
+from backend.api_http.schemas import PagedSchema, DateRangeSchema
+from backend.api_http.responses import ok_resource, ok_resource_list, error_resource_missing
 
 @api_v1_bp.get("/usages")
 def get_usages():
-    args = cast(dict[str, int], PagingSchema().load(request.args))
-    limit = args["limit"]
+    paged_args = cast(dict[str, int], PagedSchema().load(request.args))
+    limit = paged_args["limit"]
+    page = paged_args["page"]
+    offset = (page - 1) * limit
+
+    date_args = cast(dict[str, object], DateRangeSchema().load(request.args))
+    start_date = date_args["start_date"]
+    end_date = date_args["end_date"]
 
     db = get_db_session()
     rows = db.execute(
         text(
             """
-            SELECT TOP (:limit) UsageID, ClientID, ServiceID, UsageDate, UsageTime, UnitsUsed, TotalCost, CreatedDate
+            SELECT UsageID, ClientID, ServiceID, UsageDate, UsageTime, UnitsUsed, TotalCost, CreatedDate
             FROM Usages
-            ORDER BY CreatedDate DESC
+            WHERE (:start_date IS NULL OR UsageDate >= :start_date)
+              AND (:end_date   IS NULL OR UsageDate <= :end_date)
+            ORDER BY UsageDate DESC, UsageID DESC
+            OFFSET :offset ROWS
+            FETCH NEXT :limit ROWS ONLY
             """
         ),
-        {"limit": limit},
+        {
+            "limit": limit,
+            "offset": offset,
+            "start_date": start_date,
+            "end_date": end_date,
+        },
     ).fetchall()
 
     usages = []
@@ -47,7 +62,7 @@ def get_usages():
             }
         )
 
-    return jsonify({"status": "ok", "count": len(usages), "usages": usages})
+    return ok_resource_list(usages, "usage")
 
 
 @api_v1_bp.get("/usages/<int:usage_id>")
@@ -64,7 +79,7 @@ def get_usage(usage_id: int):
     ).fetchone()
 
     if row is None:
-        return jsonify({"error": "Usage not found", "usage_id": usage_id}), 404
+        return error_resource_missing("usage", usage_id)
 
     item = {
         "usage_id": row.UsageID,
@@ -76,4 +91,4 @@ def get_usage(usage_id: int):
         "total_cost": row.TotalCost,
         "created_date": row.CreatedDate.isoformat() if row.CreatedDate else None,
     }
-    return jsonify(item)
+    return ok_resource(item, "usage")

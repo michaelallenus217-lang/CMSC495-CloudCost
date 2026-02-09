@@ -21,6 +21,23 @@ def ok(data=None, meta=None, status_code=200):
 
     return jsonify(payload), status_code
 
+def ok_resource(resource, resource_type):
+    return ok(
+        data=resource,
+        meta={
+            "type": resource_type,
+        },
+    )
+
+def ok_resource_list(resource_list, resource_type):
+    return ok(
+        data=resource_list,
+        meta={
+            "type": resource_type,
+            "count": len(resource_list),
+        },
+    )
+
 
 def error(type, message, details=None, status_code=400):
     payload = {
@@ -35,3 +52,10 @@ def error(type, message, details=None, status_code=400):
         payload["error"]["details"] = details
 
     return jsonify(payload), status_code
+
+def error_resource_missing(resource_type, resource_id):
+    return error(
+        type="resource_not_found",
+        message="Resource '"+resource_type+"' with id '"+str(resource_id)+"' could not be found.",
+        status_code=404,
+    )

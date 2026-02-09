@@ -7,28 +7,36 @@ Description: Providers API endpoint. Returns cloud provider records
              (AWS, Azure, Google Cloud).
 """
 
-from flask import jsonify, request
+from flask import request
 from sqlalchemy import text
 from typing import cast
 from backend.db.session import get_db_session
 from backend.routes.v1 import api_v1_bp
-from backend.api_http.schemas import PagingSchema
-from backend.api_http.responses import ok
+from backend.api_http.schemas import PagedSchema
+from backend.api_http.responses import ok_resource, ok_resource_list, error_resource_missing
 
 @api_v1_bp.get("/providers")
 def get_providers():
-    args = cast(dict[str, int], PagingSchema().load(request.args))
-    limit = args["limit"]
+    paged_args = cast(dict[str, int], PagedSchema().load(request.args))
+    limit = paged_args["limit"]
+    page = paged_args["page"]
+    offset = (page - 1) * limit
 
     db = get_db_session()
     rows = db.execute(
         text(
             """
-            SELECT TOP (:limit) ProviderID, ProviderName
+            SELECT ProviderID, ProviderName
             FROM Providers
+            ORDER BY ProviderID DESC
+            OFFSET :offset ROWS
+            FETCH NEXT :limit ROWS ONLY
             """
         ),
-        {"limit": limit},
+        {
+            "limit": limit,
+            "offset": offset,
+        },
     ).fetchall()
 
     providers = []
@@ -40,7 +48,7 @@ def get_providers():
             }
         )
 
-    return jsonify({"status": "ok", "count": len(providers), "providers": providers})
+    return ok_resource_list(providers, "provider")
 
 
 @api_v1_bp.get("/providers/<int:provider_id>")
@@ -57,10 +65,10 @@ def get_provider(provider_id: int):
     ).fetchone()
 
     if row is None:
-        return jsonify({"error": "Provider not found", "provider_id": provider_id}), 404
+        return error_resource_missing("provider", provider_id)
 
     item = {
         "provider_id": row.ProviderID,
         "provider_name": row.ProviderName,
     }
-    return jsonify(item)
+    return ok_resource(item, "provider")
