@@ -9,7 +9,7 @@
 
 // API Configuration (Global namespace)
 const API_CONFIG = {
-    BASE_URL: 'http://localhost:5001',
+    BASE_URL: 'http://localhost:5000',
     BASE_PATH: '/api/v1',
     TIMEOUT: 10000, // 10 seconds
     USE_MOCK_DATA: false, // Set to false when backend is ready
