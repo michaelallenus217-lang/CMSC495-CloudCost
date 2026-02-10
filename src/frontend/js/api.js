@@ -110,7 +110,7 @@ function transformBackendResponse(data) {
     if (!data) return data;
     
     // Handle single object response (e.g., GET /clients/1)
-    if (!Array.isArray(data) && typeof data === 'object') {
+    if (!Array.isArray(data) && typeof data === 'object' && !data.status) {
         return transformSingleItem(data);
     }
     

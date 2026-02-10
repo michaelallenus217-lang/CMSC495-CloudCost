@@ -14,7 +14,8 @@ function formatDate(dateString) {
     return date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
-        day: 'numeric'
+        day: 'numeric',
+        timeZone: 'UTC'
     });
 }
 
@@ -25,6 +26,7 @@ function formatDateTime(dateString) {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
+        timeZone: 'UTC',
         hour: '2-digit',
         minute: '2-digit'
     });

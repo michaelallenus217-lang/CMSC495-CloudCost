@@ -43,8 +43,9 @@ function getApiUrl(endpoint, params = {}) {
 
 // Provider IDs (from backend)
 const PROVIDER_IDS = {
-    AWS: 1,
-    AZURE: 2,
+    AWS: 2001,
+    AZURE: 2002,
+    GCP: 2003,
 };
 
 // Provider names
