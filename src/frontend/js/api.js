@@ -116,17 +116,9 @@ function transformBackendResponse(data) {
     
     // Handle array response wrapped in API format
     if (data.status === 'ok') {
-        // Find the resource array (clients, services, usages, etc.)
-        const resourceKeys = Object.keys(data).filter(key => 
-            key !== 'status' && key !== 'count' && Array.isArray(data[key])
-        );
-        
-        if (resourceKeys.length > 0) {
-            const resourceKey = resourceKeys[0];
-            data[resourceKey] = data[resourceKey].map(item => transformSingleItem(item));
-        }
+        data.data = data.data.map(item => transformSingleItem(item));
     }
-    
+
     return data;
 }
 
@@ -262,8 +254,8 @@ async function fetchWithMockFallback(endpoint, params, mockDataKey, mockGenerato
         // Simulate API response format
         return {
             status: 'ok',
-            count: mockData.length,
-            [mockDataKey]: mockData,
+            meta: { count: mockData.length},
+            data: mockData,
         };
     }
     
@@ -274,15 +266,16 @@ async function fetchWithMockFallback(endpoint, params, mockDataKey, mockGenerato
         const mockData = mockGenerator ? mockGenerator() : MOCK_DATA[mockDataKey];
         return {
             status: 'ok',
-            count: mockData.length,
-            [mockDataKey]: mockData,
+            meta: { count: mockData.length},
+            data: mockData,
         };
     }
 }
 
 // API Functions
 async function getClients(limit = DEFAULT_LIMIT) {
-    return fetchWithMockFallback(ENDPOINTS.CLIENTS, { limit }, 'clients');
+    const apiResponse = await fetchWithMockFallback(ENDPOINTS.CLIENTS, { limit }, 'clients');
+    return apiResponse.data;
 }
 
 async function getClient(clientId) {
@@ -292,31 +285,36 @@ async function getClient(clientId) {
     }
     
     try {
-        return await fetchFromApi(`${ENDPOINTS.CLIENTS}/${clientId}`);
+        const apiResponse = await fetchFromApi(`${ENDPOINTS.CLIENTS}/${clientId}`);
+        return apiResponse.data;
     } catch (error) {
         return null;
     }
 }
 
 async function getProviders(limit = DEFAULT_LIMIT) {
-    return fetchWithMockFallback(ENDPOINTS.PROVIDERS, { limit }, 'providers');
+    const apiResponse = await fetchWithMockFallback(ENDPOINTS.PROVIDERS, { limit }, 'providers');
+    return apiResponse.data;
 }
 
 async function getServices(limit = DEFAULT_LIMIT) {
-    return fetchWithMockFallback(ENDPOINTS.SERVICES, { limit }, 'services');
+    const apiResponse = await fetchWithMockFallback(ENDPOINTS.SERVICES, { limit }, 'services');
+    return apiResponse.data;
 }
 
 async function getUsages(limit = DEFAULT_LIMIT) {
-    return fetchWithMockFallback(
+    const apiResponse = await fetchWithMockFallback(
         ENDPOINTS.USAGES, 
         { limit }, 
         'usages', 
         () => MOCK_DATA.generateUsages(30)
     );
+    return apiResponse.data;
 }
 
 async function getBudgets(limit = DEFAULT_LIMIT) {
-    return fetchWithMockFallback(ENDPOINTS.BUDGETS, { limit }, 'budgets');
+    const apiResponse = await fetchWithMockFallback(ENDPOINTS.BUDGETS, { limit }, 'budgets');
+    return apiResponse.data;
 }
 
 async function getBudget(budgetId) {
@@ -326,7 +324,8 @@ async function getBudget(budgetId) {
     }
     
     try {
-        return await fetchFromApi(`${ENDPOINTS.BUDGETS}/${budgetId}`);
+        const apiResponse = await fetchFromApi(`${ENDPOINTS.BUDGETS}/${budgetId}`);
+        return apiResponse.data;
     } catch (error) {
         return null;
     }
@@ -345,15 +344,15 @@ async function checkHealth() {
 // Get aggregated cost data for dashboard
 async function getDashboardData(days = 30) {
     try {
-        const [usagesResponse, providersResponse, servicesResponse] = await Promise.all([
+        const [usages, providers, services] = await Promise.all([
             getUsages(DEFAULT_LIMIT),
             getProviders(),
             getServices(),
         ]);
         
-        const usages = usagesResponse.usages || [];
-        const providers = providersResponse.providers || [];
-        const services = servicesResponse.services || [];
+        // const usages = usagesResponse.usages || [];
+        // const providers = providersResponse.providers || [];
+        // const services = servicesResponse.services || [];
         
         // Filter usages to last N days
         const cutoffDate = new Date();

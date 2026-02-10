@@ -7,29 +7,44 @@ Description: Invoices API endpoint. Returns invoice records for billing
              and cost reporting.
 """
 
-from flask import jsonify, request
+from flask import request
 from sqlalchemy import text
 from typing import cast
 from backend.db.session import get_db_session
 from backend.routes.v1 import api_v1_bp
-from backend.api_http.schemas import PagingSchema
-from backend.api_http.responses import ok
+from backend.api_http.schemas import PagedSchema, DateRangeSchema
+from backend.api_http.responses import ok_resource, ok_resource_list, error_resource_missing
 
 @api_v1_bp.get("/invoices")
 def get_invoices():
-    args = cast(dict[str, int], PagingSchema().load(request.args))
-    limit = args["limit"]
+    paged_args = cast(dict[str, int], PagedSchema().load(request.args))
+    limit = paged_args["limit"]
+    page = paged_args["page"]
+    offset = (page - 1) * limit
+
+    date_args = cast(dict[str, object], DateRangeSchema().load(request.args))
+    start_date = date_args["start_date"]
+    end_date = date_args["end_date"]
 
     db = get_db_session()
     rows = db.execute(
         text(
             """
-            SELECT TOP (:limit) InvoiceID, ClientID, InvoiceDate, InvoiceAmount, CreatedDate
+            SELECT InvoiceID, ClientID, InvoiceDate, InvoiceAmount, CreatedDate
             FROM Invoices
-            ORDER BY CreatedDate DESC
+            WHERE (:start_date IS NULL OR InvoiceDate >= :start_date)
+              AND (:end_date   IS NULL OR InvoiceDate <= :end_date)
+            ORDER BY InvoiceDate DESC, InvoiceID DESC
+            OFFSET :offset ROWS
+            FETCH NEXT :limit ROWS ONLY
             """
         ),
-        {"limit": limit},
+        {
+            "limit": limit,
+            "offset": offset,
+            "start_date": start_date,
+            "end_date": end_date,
+        },
     ).fetchall()
 
     invoices = []
@@ -44,7 +59,7 @@ def get_invoices():
             }
         )
 
-    return jsonify({"status": "ok", "count": len(invoices), "invoices": invoices})
+    return ok_resource_list(invoices, "invoice")
 
 
 @api_v1_bp.get("/invoices/<int:invoice_id>")
@@ -61,13 +76,13 @@ def get_invoice(invoice_id: int):
     ).fetchone()
 
     if row is None:
-        return jsonify({"error": "Invoice not found", "invoice_id": invoice_id}), 404
+        return error_resource_missing("invoice", invoice_id)
 
-    item = {
+    invoice = {
         "invoice_id": row.InvoiceID,
         "client_id": row.ClientID,
         "invoice_date": row.InvoiceDate.isoformat() if row.InvoiceDate else None,
         "invoice_amount": row.InvoiceAmount,
         "created_date": row.CreatedDate.isoformat() if row.CreatedDate else None,
     }
-    return jsonify(item)
+    return ok_resource(invoice, "invoice")

@@ -7,29 +7,36 @@ Description: Services API endpoint. Returns cloud service records with
              pricing information across providers.
 """
 
-from flask import jsonify, request
+from flask import request
 from sqlalchemy import text
 from typing import cast
 from backend.db.session import get_db_session
 from backend.routes.v1 import api_v1_bp
-from backend.api_http.schemas import PagingSchema
-from backend.api_http.responses import ok
+from backend.api_http.schemas import PagedSchema
+from backend.api_http.responses import ok_resource, ok_resource_list, error_resource_missing
 
 @api_v1_bp.get("/services")
 def get_services():
-    args = cast(dict[str, int], PagingSchema().load(request.args))
-    limit = args["limit"]
+    paged_args = cast(dict[str, int], PagedSchema().load(request.args))
+    limit = paged_args["limit"]
+    page = paged_args["page"]
+    offset = (page - 1) * limit
 
     db = get_db_session()
     rows = db.execute(
         text(
             """
-            SELECT TOP (:limit) ServiceID, ServiceName, ServiceType, ServiceCost, ProviderID, ServiceUnit, CreatedDate
+            SELECT ServiceID, ServiceName, ServiceType, ServiceCost, ProviderID, ServiceUnit, CreatedDate
             FROM Services
-            ORDER BY CreatedDate DESC
+            ORDER BY ServiceID DESC
+            OFFSET :offset ROWS
+            FETCH NEXT :limit ROWS ONLY
             """
         ),
-        {"limit": limit},
+        {
+            "limit": limit,
+            "offset": offset,
+        },
     ).fetchall()
 
     services = []
@@ -46,7 +53,7 @@ def get_services():
             }
         )
 
-    return jsonify({"status": "ok", "count": len(services), "services": services})
+    return ok_resource_list(services, "service")
 
 
 @api_v1_bp.get("/services/<int:service_id>")
@@ -63,7 +70,7 @@ def get_service(service_id: int):
     ).fetchone()
 
     if row is None:
-        return jsonify({"error": "Service not found", "service_id": service_id}), 404
+        return error_resource_missing("service", service_id)
 
     item = {
         "service_id": row.ServiceID,
@@ -74,4 +81,4 @@ def get_service(service_id: int):
         "service_unit": row.ServiceUnit,
         "created_date": row.CreatedDate.isoformat() if row.CreatedDate else None,
     }
-    return jsonify(item)
+    return ok_resource(item, "service")
