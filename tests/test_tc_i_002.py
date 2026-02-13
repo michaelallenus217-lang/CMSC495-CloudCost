@@ -89,14 +89,14 @@ class TestTCI002:
         if verbose:
             print(f"    Result:   {data}")
             print("\n  Step 4: Compare response data with database records")
-            print(f"    Result:   DB status = {data.get('db', 'N/A')}")
+            print(f"    Result:   DB status = {data.get('meta', {}).get('db', 'N/A')}")
         
         # Assertions
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-        assert data.get("db") == "connected", f"Expected db 'connected', got {data.get('db')}"
+        assert data.get("meta", {}).get("db") == "connected", f"Expected db 'connected', got {data.get('meta', {}).get('db')}"
         assert response_time < 2, f"Response too slow: {response_time:.2f}s"
         
-        passed = response.status_code == 200 and data.get("db") == "connected"
+        passed = response.status_code == 200 and data.get("meta", {}).get("db") == "connected"
         
         if verbose:
             self.print_result(response.status_code, data.get("db"), response_time, passed)

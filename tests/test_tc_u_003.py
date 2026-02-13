@@ -78,7 +78,7 @@ class TestTCU003:
         # Step 1: Get providers
         providers_resp = requests.get(f"{BASE_URL}/providers", timeout=TIMEOUT)
         assert providers_resp.status_code == 200
-        providers = {p["provider_id"]: p["provider_name"] for p in providers_resp.json()["providers"]}
+        providers = {p["provider_id"]: p["provider_name"] for p in providers_resp.json()["data"]}
         
         if verbose:
             print(f"    Action:   GET {BASE_URL}/providers")
@@ -90,7 +90,7 @@ class TestTCU003:
         
         services_resp = requests.get(f"{BASE_URL}/services?limit=100", timeout=TIMEOUT)
         assert services_resp.status_code == 200
-        services = {s["service_id"]: s["provider_id"] for s in services_resp.json()["services"]}
+        services = {s["service_id"]: s["provider_id"] for s in services_resp.json()["data"]}
         
         if verbose:
             print(f"    Action:   GET {BASE_URL}/services")
@@ -102,7 +102,7 @@ class TestTCU003:
         
         usages_resp = requests.get(f"{BASE_URL}/usages", timeout=TIMEOUT)
         assert usages_resp.status_code == 200
-        usages = usages_resp.json()["usages"]
+        usages = usages_resp.json()["data"]
         
         if verbose:
             print(f"    Action:   GET {BASE_URL}/usages")

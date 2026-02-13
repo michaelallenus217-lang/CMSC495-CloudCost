@@ -31,11 +31,11 @@ class TestTCF003:
         
         # Get providers for filtering
         providers_resp = requests.get(f"{BASE_URL}/providers", timeout=TIMEOUT)
-        providers = providers_resp.json()["providers"]
+        providers = providers_resp.json()["data"]
         
         # Get services for filtering
         services_resp = requests.get(f"{BASE_URL}/services", timeout=TIMEOUT)
-        services = services_resp.json()["services"]
+        services = services_resp.json()["data"]
         
         # Get service types
         service_types = set(s.get("service_type", "Unknown") for s in services)

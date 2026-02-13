@@ -30,11 +30,11 @@ class TestTCF006:
         
         # Get clients
         clients_resp = requests.get(f"{BASE_URL}/clients", timeout=TIMEOUT)
-        clients = clients_resp.json()["clients"]
+        clients = clients_resp.json()["data"]
         
         # Get usages per client
         usages_resp = requests.get(f"{BASE_URL}/usages", timeout=TIMEOUT)
-        usages = usages_resp.json()["usages"]
+        usages = usages_resp.json()["data"]
         
         # Count usages per client
         client_usage_count = {}

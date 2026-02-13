@@ -33,10 +33,10 @@ class TestTCU008:
         assert response.status_code == 200
         
         data = response.json()
-        assert "clients" in data
-        assert len(data["clients"]) > 0
+        assert "data" in data
+        assert len(data["data"]) > 0
         
-        client = data["clients"][0]
+        client = data["data"][0]
         missing = [f for f in self.EXPECTED_FIELDS if f not in client]
         
         if verbose:

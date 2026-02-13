@@ -81,7 +81,7 @@ class TestTCI003:
         
         assert response.status_code == 200
         data = response.json()
-        usages = data.get("usages", [])
+        usages = data.get("data", [])
         
         if verbose:
             print("\n  Step 2: Inspect Chart.js data object")

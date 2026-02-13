@@ -95,12 +95,12 @@ class TestTCU002:
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         data = response.json()
         
-        assert "usages" in data, "Response missing 'usages' array"
-        assert "count" in data, "Response missing 'count' field"
-        assert len(data["usages"]) > 0, "Usages array is empty"
+        assert "data" in data, "Response missing 'data' array"
+        assert "count" in data.get("meta", {}), "Response missing 'count' in meta"
+        assert len(data["data"]) > 0, "Usages array is empty"
         
         # Check first record has required fields
-        first_record = data["usages"][0]
+        first_record = data["data"][0]
         missing_fields = [f for f in self.EXPECTED_FIELDS if f not in first_record]
         
         assert not missing_fields, f"Missing fields: {missing_fields}"

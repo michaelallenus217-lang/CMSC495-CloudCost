@@ -17,4 +17,4 @@ def test_providers_returns_list():
     assert_json_response(response)
     data = response.json()
     assert data.get("status") == "ok"
-    assert isinstance(data.get("providers"), list)
+    assert isinstance(data.get("data"), list)

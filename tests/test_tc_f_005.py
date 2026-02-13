@@ -31,7 +31,7 @@ class TestTCF005:
         
         response = requests.get(f"{BASE_URL}/usages", timeout=TIMEOUT)
         assert response.status_code == 200
-        usages = response.json()["usages"]
+        usages = response.json()["data"]
         
         # Calculate metrics
         if usages:

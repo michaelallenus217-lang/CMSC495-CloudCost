@@ -16,4 +16,4 @@ def test_single_client():
     assert response.status_code == 200
     assert_json_response(response)
     data = response.json()
-    assert data.get("client_id") == 1001
+    assert data.get("data", {}).get("client_id") == 1001

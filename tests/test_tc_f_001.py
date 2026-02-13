@@ -33,15 +33,15 @@ class TestTCF001:
         # Get providers
         providers_resp = requests.get(f"{BASE_URL}/providers", timeout=TIMEOUT)
         assert providers_resp.status_code == 200
-        providers = {p["provider_id"]: p["provider_name"] for p in providers_resp.json()["providers"]}
+        providers = {p["provider_id"]: p["provider_name"] for p in providers_resp.json()["data"]}
         
         # Get services (maps to providers)
         services_resp = requests.get(f"{BASE_URL}/services", timeout=TIMEOUT)
-        services = {s["service_id"]: s["provider_id"] for s in services_resp.json()["services"]}
+        services = {s["service_id"]: s["provider_id"] for s in services_resp.json()["data"]}
         
         # Get usages
         usages_resp = requests.get(f"{BASE_URL}/usages", timeout=TIMEOUT)
-        usages = usages_resp.json()["usages"]
+        usages = usages_resp.json()["data"]
         
         # Aggregate by provider
         provider_costs = {}

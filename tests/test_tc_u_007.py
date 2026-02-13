@@ -32,7 +32,7 @@ class TestTCU007:
         assert response.status_code == 200
         
         data = response.json()
-        services = data.get("services", [])
+        services = data.get("data", [])
         assert len(services) > 0, "No services found"
         
         # Check all services have provider_id

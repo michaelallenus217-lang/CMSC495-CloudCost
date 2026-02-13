@@ -74,7 +74,7 @@ class TestTCI004:
         # Get all clients
         clients_resp = requests.get(f"{BASE_URL}/clients", timeout=TIMEOUT)
         assert clients_resp.status_code == 200
-        clients = clients_resp.json().get("clients", [])
+        clients = clients_resp.json().get("data", [])
         
         if verbose:
             print(f"    Action:   GET {BASE_URL}/clients")
