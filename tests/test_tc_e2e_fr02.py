@@ -31,7 +31,7 @@ class TestE2EFR02:
         # Step 1: Get date range from database
         print("\n  Step 1: Query database for date range")
         usages_resp = requests.get(f"{API_URL}/usages", timeout=30)
-        usages = usages_resp.json()["usages"]
+        usages = usages_resp.json()["data"]
         
         dates = sorted(set(u["usage_date"] for u in usages))
         print(f"    Date range: {dates[0]} to {dates[-1]}")

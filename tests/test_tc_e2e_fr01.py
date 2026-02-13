@@ -33,13 +33,13 @@ class TestE2EFR01:
         print("\n  Step 1: Query database for actual costs")
         
         providers_resp = requests.get(f"{API_URL}/providers", timeout=30)
-        providers = {p["provider_id"]: p["provider_name"] for p in providers_resp.json()["providers"]}
+        providers = {p["provider_id"]: p["provider_name"] for p in providers_resp.json()["data"]}
         
         services_resp = requests.get(f"{API_URL}/services?limit=100", timeout=30)
-        service_to_provider = {s["service_id"]: s["provider_id"] for s in services_resp.json()["services"]}
+        service_to_provider = {s["service_id"]: s["provider_id"] for s in services_resp.json()["data"]}
         
         usages_resp = requests.get(f"{API_URL}/usages", timeout=30)
-        usages = usages_resp.json()["usages"]
+        usages = usages_resp.json()["data"]
         
         # Calculate expected totals by provider
         expected_costs = {"AWS": Decimal("0"), "Azure": Decimal("0")}

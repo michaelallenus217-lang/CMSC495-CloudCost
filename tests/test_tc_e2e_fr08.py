@@ -32,7 +32,7 @@ class TestE2EFR08:
         # Step 1: Calculate metrics from database
         print("\n  Step 1: Calculate metrics from database")
         usages_resp = requests.get(f"{API_URL}/usages", timeout=30)
-        usages = usages_resp.json()["usages"]
+        usages = usages_resp.json()["data"]
         
         costs = [Decimal(str(u["total_cost"])) for u in usages]
         
