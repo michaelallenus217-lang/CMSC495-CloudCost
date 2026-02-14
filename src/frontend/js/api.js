@@ -345,7 +345,7 @@ async function checkHealth() {
 async function getDashboardData(days = 30) {
     try {
         const [usages, providers, services] = await Promise.all([
-            getUsages(50000),
+            getUsages(1000),
             getProviders(),
             getServices(),
         ]);
@@ -404,7 +404,6 @@ async function getDashboardData(days = 30) {
             totalCost,
             awsCost: costsByProvider[PROVIDER_IDS.AWS] || 0,
             azureCost: costsByProvider[PROVIDER_IDS.AZURE] || 0,
-            gcpCost: costsByProvider[PROVIDER_IDS.GCP] || 0,
             trendData,
             usages: recentUsages,
             services,
@@ -418,13 +417,29 @@ async function getDashboardData(days = 30) {
 }
 
 // Get waste alerts (computed from usage data)
-async function getWasteAlerts() {
+async function getWasteAlerts(filters = {}) {
     try {
         const { usages, services, providers } = await getDashboardData(30);
         
+        // Apply global filters to usages before computing waste
+        let filteredUsages = usages;
+        if (filters.clientId) {
+            filteredUsages = filteredUsages.filter(u => u.client_id === parseInt(filters.clientId));
+        }
+        if (filters.providerId) {
+            // Get services for this provider to filter usages
+            const providerServiceIds = services
+                .filter(s => s.provider_id === parseInt(filters.providerId))
+                .map(s => s.service_id);
+            filteredUsages = filteredUsages.filter(u => providerServiceIds.includes(u.service_id));
+        }
+        if (filters.serviceId) {
+            filteredUsages = filteredUsages.filter(u => u.service_id === parseInt(filters.serviceId));
+        }
+        
         // Group usages by service
         const usagesByService = {};
-        usages.forEach(usage => {
+        filteredUsages.forEach(usage => {
             if (!usagesByService[usage.service_id]) {
                 usagesByService[usage.service_id] = [];
             }
@@ -479,9 +494,9 @@ async function getWasteAlerts() {
 }
 
 // Get recommendations (mock implementation)
-async function getRecommendations() {
+async function getRecommendations(filters = {}) {
     // TODO: Replace with real backend endpoint when available
-    const alerts = await getWasteAlerts();
+    const alerts = await getWasteAlerts(filters);
     
     const recommendations = alerts.slice(0, 5).map((alert, index) => ({
         id: index + 1,

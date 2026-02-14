@@ -30,6 +30,12 @@
         <button id="filter-toggle" class="filter-toggle-btn">
             ⚙ Filters <span id="active-filter-count" class="filter-count hidden">0</span>
         </button>
+        <div class="navbar-client">
+            <label for="client-filter">Client</label>
+            <select id="client-filter" class="filter-select">
+                <option value="">All Clients</option>
+            </select>
+        </div>
     </nav>
 
     <!-- Global Filter Drawer (persists across all pages) -->
@@ -58,12 +64,6 @@
                 <label>Service Type</label>
                 <select id="service-filter" class="filter-select">
                     <option value="">All Services</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <label>Client</label>
-                <select id="client-filter" class="filter-select">
-                    <option value="">All Clients</option>
                 </select>
             </div>
             <div class="filter-actions">
@@ -120,6 +120,37 @@
                     <h3>Potential Savings</h3>
                     <p class="cost-value savings" id="potential-savings">$0.00</p>
                     <span class="cost-period">Estimated monthly</span>
+                </div>
+            </div>
+
+            <!-- Component 10: Resource Metrics (FR-08) -->
+            <div class="resource-metrics">
+                <h3>Resource Metrics</h3>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <span class="metric-label">Avg Daily Cost</span>
+                        <span class="metric-value" id="avg-daily-cost">$0.00</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Max Daily Cost</span>
+                        <span class="metric-value" id="max-daily-cost">$0.00</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Active Services</span>
+                        <span class="metric-value" id="active-services">0</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Avg Cost / Service</span>
+                        <span class="metric-value" id="avg-cost-per-service">$0.00</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Total Units Used</span>
+                        <span class="metric-value" id="total-units-used">0</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Avg Units / Day</span>
+                        <span class="metric-value" id="avg-units-per-day">0</span>
+                    </div>
                 </div>
             </div>
 
@@ -183,13 +214,6 @@
             <p class="page-description">Configure spending limits and alert thresholds</p>
             
             <div class="settings-form">
-                <div class="form-group">
-                    <label for="client-select">Client</label>
-                    <select id="client-select" class="form-control">
-                        <option value="">Select a client</option>
-                    </select>
-                </div>
-                
                 <div class="form-group">
                     <label for="budget-amount">Monthly Budget ($)</label>
                     <input type="number" id="budget-amount" class="form-control" placeholder="5000.00" step="0.01">
