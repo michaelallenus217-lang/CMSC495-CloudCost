@@ -70,14 +70,17 @@ class TestE2EFR01:
         
         aws_element = page.locator("#aws-cost")
         azure_element = page.locator("#azure-cost")
+        gcp_element = page.locator("#gcp-cost")
         total_element = page.locator("#total-cost")
         
         displayed_aws = aws_element.inner_text()
         displayed_azure = azure_element.inner_text()
+        displayed_gcp = gcp_element.inner_text()
         displayed_total = total_element.inner_text()
         
         print(f"    Frontend AWS:   {displayed_aws}")
         print(f"    Frontend Azure: {displayed_azure}")
+        print(f"    Frontend GCP:    {displayed_gcp}")
         print(f"    Frontend Total: {displayed_total}")
         
         # Step 4: Verify values
@@ -95,13 +98,14 @@ class TestE2EFR01:
         
         frontend_aws = parse_currency(displayed_aws)
         frontend_azure = parse_currency(displayed_azure)
+        frontend_gcp = parse_currency(displayed_gcp)
         frontend_total = parse_currency(displayed_total)
         
-        # Verify AWS + Azure = Total
-        calculated_total = frontend_aws + frontend_azure
+        # Verify AWS + Azure + GCP = Total
+        calculated_total = frontend_aws + frontend_azure + frontend_gcp
         totals_match = abs(calculated_total - frontend_total) < Decimal("0.01")
         
-        print(f"    AWS + Azure = ${calculated_total:.2f}")
+        print(f"    AWS + Azure + GCP = ${calculated_total:.2f}")
         print(f"    Displayed Total = ${frontend_total:.2f}")
         print(f"    Totals Match: {totals_match}")
         
@@ -110,4 +114,4 @@ class TestE2EFR01:
         print(f"PASS/FAIL:         [{'X' if passed else ' '}] Pass  [{' ' if passed else 'X'}] Fail")
         print(f"{'='*70}")
         
-        assert totals_match, f"AWS + Azure ({calculated_total}) != Total ({frontend_total})"
+        assert totals_match, f"AWS + Azure + GCP ({calculated_total}) != Total ({frontend_total})"
