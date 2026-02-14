@@ -50,14 +50,16 @@ const PROVIDER_IDS = {
 
 // Provider names
 const PROVIDER_NAMES = {
-    1: 'AWS',
-    2: 'Azure',
+    2001: 'AWS',
+    2002: 'Azure',
+    2003: 'GCP',
 };
 
 // Chart colors
 const CHART_COLORS = {
     AWS: '#ff9900',
     AZURE: '#0078d4',
+    GCP: '#22c55e',
     PRIMARY: '#2563eb',
     SUCCESS: '#10b981',
     WARNING: '#f59e0b',
@@ -73,7 +75,7 @@ const DATE_RANGES = {
 };
 
 // Default query limit for API calls
-const DEFAULT_LIMIT = 100;
+const DEFAULT_LIMIT = 50000;
 
 // Waste detection thresholds
 const WASTE_THRESHOLDS = {
