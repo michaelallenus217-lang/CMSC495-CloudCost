@@ -87,12 +87,13 @@ function navigateToPage(page) {
 async function loadPageData(page) {
     switch (page) {
         case 'dashboard':
-            await loadDashboard();
             // Re-apply active filters if any are set
             const clientFilter = document.getElementById('client-filter')?.value;
             const providerFilter = document.getElementById('provider-filter')?.value;
             const serviceFilter = document.getElementById('service-filter')?.value;
-            if (clientFilter || providerFilter || serviceFilter) {
+            const hasFilters = clientFilter || providerFilter || serviceFilter;
+            await loadDashboard(hasFilters);
+            if (hasFilters) {
                 await applyFilters();
             }
             break;
@@ -111,8 +112,15 @@ async function loadPageData(page) {
 // Event listeners setup
 function setupEventListeners() {
     // Dashboard refresh button
-    document.getElementById('refresh-button')?.addEventListener('click', () => {
-        loadDashboard();
+    document.getElementById('refresh-button')?.addEventListener('click', async () => {
+        const cf = document.getElementById('client-filter')?.value;
+        const pf = document.getElementById('provider-filter')?.value;
+        const sf = document.getElementById('service-filter')?.value;
+        const hasFilters = cf || pf || sf;
+        await loadDashboard(hasFilters);
+        if (hasFilters) {
+            await applyFilters();
+        }
     });
     
     // Filter drawer toggle
@@ -127,10 +135,17 @@ function setupEventListeners() {
     });
 
     // Date range selector (now in global filter drawer)
-    document.getElementById('date-range-selector')?.addEventListener('change', (e) => {
+    document.getElementById('date-range-selector')?.addEventListener('change', async (e) => {
         currentDateRange = parseInt(e.target.value);
         unfilteredDashboardData = null; // Clear cache when date range changes
-        loadDashboard();
+        const cf = document.getElementById('client-filter')?.value;
+        const pf = document.getElementById('provider-filter')?.value;
+        const sf = document.getElementById('service-filter')?.value;
+        const hasFilters = cf || pf || sf;
+        await loadDashboard(hasFilters);
+        if (hasFilters) {
+            await applyFilters();
+        }
         updateActiveFilterCount();
     });
     
@@ -171,7 +186,7 @@ function setupEventListeners() {
 }
 
 // Load Dashboard
-async function loadDashboard() {
+async function loadDashboard(skipRender = false) {
     try {
         hideError();
         
@@ -197,8 +212,10 @@ async function loadDashboard() {
         // Calculate metrics (including FR-08 resource metrics)
         const metricsData = calculateDashboardMetrics(data.usages, data.services, data.providers);
         
-        // Update UI
-        updateDashboardUI(metricsData);
+        // Update UI (skip if filters will be applied immediately after)
+        if (!skipRender) {
+            updateDashboardUI(metricsData);
+        }
         
         // Update cost period display
         document.querySelectorAll('.cost-period').forEach(el => {
