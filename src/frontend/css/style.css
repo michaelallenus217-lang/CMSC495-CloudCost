@@ -21,6 +21,7 @@
     --secondary-color: #64748b;
     --aws-color: #ff9900;
     --azure-color: #0078d4;
+    --gcp-color: #34a853;
     --success-color: #10b981;
     --warning-color: #f59e0b;
     --danger-color: #ef4444;
@@ -187,7 +188,7 @@ body {
 /* Cost Summary Cards */
 .cost-summary-cards {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: var(--spacing-lg);
     margin-bottom: var(--spacing-xl);
 }
@@ -225,6 +226,10 @@ body {
 }
 
 .summary-card.azure .cost-value {
+
+.summary-card.gcp .cost-value {
+    color: var(--gcp-color);
+}
     color: var(--azure-color);
 }
 

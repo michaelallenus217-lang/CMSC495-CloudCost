@@ -149,6 +149,7 @@ async function loadDashboard() {
         document.getElementById('total-cost').textContent = 'Loading...';
         document.getElementById('aws-cost').textContent = 'Loading...';
         document.getElementById('azure-cost').textContent = 'Loading...';
+        document.getElementById('gcp-cost').textContent = 'Loading...';
         document.getElementById('potential-savings').textContent = 'Loading...';
         
         // Fetch dashboard data
@@ -293,7 +294,7 @@ async function applyFilters() {
         
         // If no results after filtering, show message
         if (filteredUsages.length === 0) {
-            showError('No data found for the selected filters. Try different filter combinations.');
+            showError('No usage records match this filter combination. Try adjusting your selections.');
             return;
         }
         
@@ -361,6 +362,7 @@ function calculateDashboardMetrics(usages, services, providers) {
         totalCost,
         awsCost: costsByProvider[PROVIDER_IDS.AWS] || 0,
         azureCost: costsByProvider[PROVIDER_IDS.AZURE] || 0,
+        gcpCost: costsByProvider[PROVIDER_IDS.GCP] || 0,
         trendData,
         usages,
         services,
@@ -374,6 +376,7 @@ function updateDashboardUI(data) {
     document.getElementById('total-cost').textContent = formatCurrency(data.totalCost);
     document.getElementById('aws-cost').textContent = formatCurrency(data.awsCost);
     document.getElementById('azure-cost').textContent = formatCurrency(data.azureCost);
+    document.getElementById('gcp-cost').textContent = formatCurrency(data.gcpCost);
     
     // Update potential savings (estimate 15% of total)
     const potentialSavings = data.totalCost * 0.15;

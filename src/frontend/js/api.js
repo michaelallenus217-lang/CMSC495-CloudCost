@@ -404,6 +404,7 @@ async function getDashboardData(days = 30) {
             totalCost,
             awsCost: costsByProvider[PROVIDER_IDS.AWS] || 0,
             azureCost: costsByProvider[PROVIDER_IDS.AZURE] || 0,
+            gcpCost: costsByProvider[PROVIDER_IDS.GCP] || 0,
             trendData,
             usages: recentUsages,
             services,
