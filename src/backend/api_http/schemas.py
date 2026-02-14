@@ -1,16 +1,18 @@
 """
-File: __init__.py
+File: schemas.py
 Project: Cloud Cost Intelligence Platform
 Author: Sean Kellner (Backend Lead)
 Created: Feburary 2026
 Description: Defined API parameter schemas that endpoints can make use of
 """
 
-from marshmallow import EXCLUDE, Schema, fields, validate, validates_schema, ValidationError
+from marshmallow import EXCLUDE, Schema, fields, validate, validates_schema, ValidationError, RAISE
+from backend.api_http.fields import FlexibleDecimal
+
 
 
 # For endpoints that return lists of data in pages
-# NOTE: Max page size is 1000
+# NOTE: Max page size is 50000
 class PagedSchema(Schema):
     class Meta:
         unknown = EXCLUDE
@@ -44,3 +46,14 @@ class DateRangeSchema(Schema):
             raise ValidationError(
                 {"start_date": ["start_date must be on or before end_date."]}
             )
+
+
+
+class BudgetPatchSchema(Schema):
+    class Meta:
+        unknown = RAISE  # reject any field not defined here
+
+    alert_enabled = fields.Bool()
+    alert_threshold = FlexibleDecimal()
+    budget_amount = FlexibleDecimal()
+    monthly_limit = FlexibleDecimal()

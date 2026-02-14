@@ -1,5 +1,5 @@
 """
-File: __init__.py
+File: responses.py
 Project: Cloud Cost Intelligence Platform
 Author: Sean Kellner (Backend Lead)
 Created: Feburary 2026
@@ -58,4 +58,12 @@ def error_resource_missing(resource_type, resource_id):
         type="resource_not_found",
         message="Resource '"+resource_type+"' with id '"+str(resource_id)+"' could not be found.",
         status_code=404,
+    )
+
+def error_bad_request(message, details=None):
+    return error(
+        type="bad_request",
+        message=message,
+        details=details,
+        status_code=400,
     )
