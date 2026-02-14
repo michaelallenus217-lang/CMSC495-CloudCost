@@ -87,7 +87,15 @@ function navigateToPage(page) {
 async function loadPageData(page) {
     switch (page) {
         case 'dashboard':
-            await loadDashboard();
+            // Re-apply active filters if any are set
+            const clientFilter = document.getElementById('client-filter')?.value;
+            const providerFilter = document.getElementById('provider-filter')?.value;
+            const serviceFilter = document.getElementById('service-filter')?.value;
+            const hasFilters = clientFilter || providerFilter || serviceFilter;
+            await loadDashboard(hasFilters);
+            if (hasFilters) {
+                await applyFilters();
+            }
             break;
         case 'waste':
             await loadWasteAlerts();
@@ -104,21 +112,58 @@ async function loadPageData(page) {
 // Event listeners setup
 function setupEventListeners() {
     // Dashboard refresh button
-    document.getElementById('refresh-button')?.addEventListener('click', () => {
-        loadDashboard();
+    document.getElementById('refresh-button')?.addEventListener('click', async () => {
+        const cf = document.getElementById('client-filter')?.value;
+        const pf = document.getElementById('provider-filter')?.value;
+        const sf = document.getElementById('service-filter')?.value;
+        const hasFilters = cf || pf || sf;
+        await loadDashboard(hasFilters);
+        if (hasFilters) {
+            await applyFilters();
+        }
     });
     
-    // Date range selector
-    document.getElementById('date-range-selector')?.addEventListener('change', (e) => {
+    // Filter drawer toggle
+    document.getElementById('filter-toggle')?.addEventListener('click', () => {
+        const drawer = document.getElementById('filter-drawer');
+        const toggle = document.getElementById('filter-toggle');
+        if (drawer) {
+            drawer.classList.toggle('hidden');
+            drawer.classList.toggle('open');
+            toggle.classList.toggle('active');
+        }
+    });
+
+    // Date range selector (now in global filter drawer)
+    document.getElementById('date-range-selector')?.addEventListener('change', async (e) => {
         currentDateRange = parseInt(e.target.value);
-        document.getElementById('export-date-range').value = currentDateRange;
         unfilteredDashboardData = null; // Clear cache when date range changes
-        loadDashboard();
+        const cf = document.getElementById('client-filter')?.value;
+        const pf = document.getElementById('provider-filter')?.value;
+        const sf = document.getElementById('service-filter')?.value;
+        const hasFilters = cf || pf || sf;
+        await loadDashboard(hasFilters);
+        if (hasFilters) {
+            await applyFilters();
+        }
+        updateActiveFilterCount();
     });
     
     // Filter buttons
-    document.getElementById('apply-filters')?.addEventListener('click', applyFilters);
-    document.getElementById('clear-filters')?.addEventListener('click', clearFilters);
+    document.getElementById('apply-filters')?.addEventListener('click', () => {
+        applyFilters();
+        updateActiveFilterCount();
+    });
+    document.getElementById('clear-filters')?.addEventListener('click', () => {
+        clearFilters();
+        updateActiveFilterCount();
+    });
+
+    // Client selector in navbar - auto-apply on change
+    document.getElementById('client-filter')?.addEventListener('change', () => {
+        applyFilters();
+        updateActiveFilterCount();
+    });
     
     // Provider filter cascading (optional enhancement)
     document.getElementById('provider-filter')?.addEventListener('change', (e) => {
@@ -141,7 +186,7 @@ function setupEventListeners() {
 }
 
 // Load Dashboard
-async function loadDashboard() {
+async function loadDashboard(skipRender = false) {
     try {
         hideError();
         
@@ -151,6 +196,12 @@ async function loadDashboard() {
         document.getElementById('azure-cost').textContent = 'Loading...';
         document.getElementById('gcp-cost').textContent = 'Loading...';
         document.getElementById('potential-savings').textContent = 'Loading...';
+        document.getElementById('avg-daily-cost').textContent = '...';
+        document.getElementById('max-daily-cost').textContent = '...';
+        document.getElementById('active-services').textContent = '...';
+        document.getElementById('avg-cost-per-service').textContent = '...';
+        document.getElementById('total-units-used').textContent = '...';
+        document.getElementById('avg-units-per-day').textContent = '...';
         
         // Fetch dashboard data
         const data = await getDashboardData(currentDateRange);
@@ -158,8 +209,13 @@ async function loadDashboard() {
         // Cache the unfiltered data for filtering
         unfilteredDashboardData = data;
         
-        // Update UI
-        updateDashboardUI(data);
+        // Calculate metrics (including FR-08 resource metrics)
+        const metricsData = calculateDashboardMetrics(data.usages, data.services, data.providers);
+        
+        // Update UI (skip if filters will be applied immediately after)
+        if (!skipRender) {
+            updateDashboardUI(metricsData);
+        }
         
         // Update cost period display
         document.querySelectorAll('.cost-period').forEach(el => {
@@ -188,23 +244,12 @@ async function populateFilters(services = null, providers = null) {
             services = servicesResponse.services || [];
             providers = providersResponse.providers || [];
             const clients = clientsResponse || [];
-            
-            // Populate clients dropdown in settings
-            const clientSelect = document.getElementById('client-select');
-            if (clientSelect) {
-                clientSelect.innerHTML = '<option value="">Select a client</option>';
-                clients.forEach(client => {
-                    const option = document.createElement('option');
-                    option.value = client.client_id;
-                    option.textContent = formatClientName(client.client_name);
-                    clientSelect.appendChild(option);
-                });
-            }
         }
         
         // Populate service filter
         const serviceFilter = document.getElementById('service-filter');
         if (serviceFilter && services.length > 0) {
+            const savedServiceValue = serviceFilter.value;
             serviceFilter.innerHTML = '<option value="">All Services</option>';
             
             // Group services by type
@@ -222,11 +267,13 @@ async function populateFilters(services = null, providers = null) {
                 
                 serviceFilter.appendChild(optgroup);
             });
+            serviceFilter.value = savedServiceValue;
         }
         
         // Populate client filter
         const clientFilter = document.getElementById('client-filter');
         if (clientFilter) {
+            const savedClientValue = clientFilter.value;
             const clientsResponse = await getClients();
             const clients = clientsResponse || [];
             
@@ -234,9 +281,10 @@ async function populateFilters(services = null, providers = null) {
             clients.forEach(client => {
                 const option = document.createElement('option');
                 option.value = client.client_id;
-                option.textContent = formatClientName(client.client_name);
+                option.textContent = client.client_name;
                 clientFilter.appendChild(option);
             });
+            clientFilter.value = savedClientValue;
         }
     } catch (error) {
         console.error('Error populating filters:', error);
@@ -258,10 +306,19 @@ async function applyFilters() {
         if (!providerId && !serviceId && !clientId) {
             console.log('No filters selected - showing all data');
             if (unfilteredDashboardData) {
-                updateDashboardUI(unfilteredDashboardData);
+                const metricsData = calculateDashboardMetrics(
+                    unfilteredDashboardData.usages,
+                    unfilteredDashboardData.services,
+                    unfilteredDashboardData.providers
+                );
+                updateDashboardUI(metricsData);
             } else {
                 await loadDashboard();
             }
+            // Reload waste/recommendations if active
+            const activePage = document.querySelector('.nav-link.active')?.dataset.page;
+            if (activePage === 'waste') await loadWasteAlerts();
+            if (activePage === 'recommendations') await loadRecommendations();
             return;
         }
         
@@ -294,7 +351,7 @@ async function applyFilters() {
         
         // If no results after filtering, show message
         if (filteredUsages.length === 0) {
-            showError('No usage records match this filter combination. Try adjusting your selections.');
+            showError('No data found for the selected filters. Try different filter combinations.');
             return;
         }
         
@@ -310,6 +367,11 @@ async function applyFilters() {
         
         console.log(`✓ Filters applied: Showing ${filteredUsages.length} of ${unfilteredDashboardData.usages.length} total records`);
         console.log(`Total Cost: ${formatCurrency(filteredData.totalCost)} (was ${formatCurrency(unfilteredDashboardData.totalCost)})`);
+        
+        // Also reload waste alerts / recommendations if those pages are active
+        const activePage = document.querySelector('.nav-link.active')?.dataset.page;
+        if (activePage === 'waste') await loadWasteAlerts();
+        if (activePage === 'recommendations') await loadRecommendations();
         
     } catch (error) {
         console.error('Error applying filters:', error);
@@ -340,7 +402,7 @@ function calculateDashboardMetrics(usages, services, providers) {
     usages.forEach(usage => {
         const date = usage.usage_date;
         if (!costsByDate[date]) {
-            costsByDate[date] = { date, total: 0, aws: 0, azure: 0 };
+            costsByDate[date] = { date, total: 0, aws: 0, azure: 0, gcp: 0 };
         }
         
         const service = services.find(s => s.service_id === usage.service_id);
@@ -350,6 +412,8 @@ function calculateDashboardMetrics(usages, services, providers) {
                 costsByDate[date].aws += usage.total_cost;
             } else if (service.provider_id === PROVIDER_IDS.AZURE) {
                 costsByDate[date].azure += usage.total_cost;
+            } else if (service.provider_id === PROVIDER_IDS.GCP) {
+                costsByDate[date].gcp += usage.total_cost;
             }
         }
     });
@@ -358,12 +422,27 @@ function calculateDashboardMetrics(usages, services, providers) {
         a.date.localeCompare(b.date)
     );
     
+    // Resource metrics (FR-08)
+    const uniqueDays = Object.keys(costsByDate).length || 1;
+    const avgDailyCost = totalCost / uniqueDays;
+    const maxDailyCost = trendData.reduce((max, d) => Math.max(max, d.total), 0);
+    const activeServices = new Set(usages.map(u => u.service_id)).size;
+    const avgCostPerService = activeServices > 0 ? totalCost / activeServices : 0;
+    const totalUnitsUsed = usages.reduce((sum, u) => sum + u.units_used, 0);
+    const avgUnitsPerDay = totalUnitsUsed / uniqueDays;
+    
     return {
         totalCost,
         awsCost: costsByProvider[PROVIDER_IDS.AWS] || 0,
         azureCost: costsByProvider[PROVIDER_IDS.AZURE] || 0,
         gcpCost: costsByProvider[PROVIDER_IDS.GCP] || 0,
         trendData,
+        avgDailyCost,
+        maxDailyCost,
+        activeServices,
+        avgCostPerService,
+        totalUnitsUsed,
+        avgUnitsPerDay,
         usages,
         services,
         providers,
@@ -381,6 +460,14 @@ function updateDashboardUI(data) {
     // Update potential savings (estimate 15% of total)
     const potentialSavings = data.totalCost * 0.15;
     document.getElementById('potential-savings').textContent = formatCurrency(potentialSavings);
+    
+    // Update resource metrics (FR-08)
+    document.getElementById('avg-daily-cost').textContent = formatCurrency(data.avgDailyCost);
+    document.getElementById('max-daily-cost').textContent = formatCurrency(data.maxDailyCost);
+    document.getElementById('active-services').textContent = data.activeServices;
+    document.getElementById('avg-cost-per-service').textContent = formatCurrency(data.avgCostPerService);
+    document.getElementById('total-units-used').textContent = formatNumber(Math.round(data.totalUnitsUsed));
+    document.getElementById('avg-units-per-day').textContent = formatNumber(Math.round(data.avgUnitsPerDay));
     
     // Re-render trend chart with filtered data
     renderTrendChart(data.trendData);
@@ -430,11 +517,35 @@ function clearFilters() {
     
     // Re-render dashboard with unfiltered data
     if (unfilteredDashboardData) {
-        updateDashboardUI(unfilteredDashboardData);
+        const metricsData = calculateDashboardMetrics(
+            unfilteredDashboardData.usages,
+            unfilteredDashboardData.services,
+            unfilteredDashboardData.providers
+        );
+        updateDashboardUI(metricsData);
         console.log('Filters cleared - showing all data');
     } else {
         // If we don't have cached data, reload
         loadDashboard();
+    }
+}
+
+// Update the active filter count badge in the navbar
+function updateActiveFilterCount() {
+    const badge = document.getElementById('active-filter-count');
+    if (!badge) return;
+    
+    let count = 0;
+    if (document.getElementById('provider-filter')?.value) count++;
+    if (document.getElementById('service-filter')?.value) count++;
+    if (document.getElementById('client-filter')?.value) count++;
+    // Date range doesn't count as a "filter" since it always has a value
+    
+    if (count > 0) {
+        badge.textContent = count;
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
     }
 }
 
@@ -455,41 +566,85 @@ function renderTrendChart(trendData) {
     const totalData = trendData.map(d => d.total);
     const awsData = trendData.map(d => d.aws);
     const azureData = trendData.map(d => d.azure);
+    const gcpData = trendData.map(d => d.gcp);
+    
+    // Helper: check if a data array is all zeros
+    const isAllZero = (arr) => arr.every(v => v === 0);
+    
+    // Helper: check if two arrays are equal (total matches a single provider)
+    const arraysEqual = (a, b) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) < 0.01);
+    
+    // Count how many providers have non-zero data
+    const activeProviders = [awsData, azureData, gcpData].filter(arr => !isAllZero(arr));
+    
+    // Hide total cost line if it duplicates a single active provider
+    const showTotal = activeProviders.length > 1 || (
+        activeProviders.length === 1 &&
+        !arraysEqual(totalData, awsData) &&
+        !arraysEqual(totalData, azureData) &&
+        !arraysEqual(totalData, gcpData)
+    );
+    
+    // Build datasets - only include lines that add information
+    const datasets = [];
+    
+    if (showTotal && !isAllZero(totalData)) {
+        datasets.push({
+            label: 'Total Cost',
+            data: totalData,
+            borderColor: '#9ca3af',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            borderDash: [6, 4],
+            fill: false,
+            tension: 0.4,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+        });
+    }
+    
+    if (!isAllZero(awsData)) {
+        datasets.push({
+            label: 'AWS',
+            data: awsData,
+            borderColor: CHART_COLORS.AWS,
+            backgroundColor: CHART_COLORS.AWS + '20',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.4,
+        });
+    }
+    
+    if (!isAllZero(azureData)) {
+        datasets.push({
+            label: 'Azure',
+            data: azureData,
+            borderColor: CHART_COLORS.AZURE,
+            backgroundColor: CHART_COLORS.AZURE + '20',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.4,
+        });
+    }
+    
+    if (!isAllZero(gcpData)) {
+        datasets.push({
+            label: 'GCP',
+            data: gcpData,
+            borderColor: CHART_COLORS.GCP,
+            backgroundColor: CHART_COLORS.GCP + '20',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.4,
+        });
+    }
     
     // Create new chart
     dashboardChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: labels,
-            datasets: [
-                {
-                    label: 'Total Cost',
-                    data: totalData,
-                    borderColor: CHART_COLORS.PRIMARY,
-                    backgroundColor: CHART_COLORS.PRIMARY + '20',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4,
-                },
-                {
-                    label: 'AWS',
-                    data: awsData,
-                    borderColor: CHART_COLORS.AWS,
-                    backgroundColor: CHART_COLORS.AWS + '20',
-                    borderWidth: 2,
-                    fill: false,
-                    tension: 0.4,
-                },
-                {
-                    label: 'Azure',
-                    data: azureData,
-                    borderColor: CHART_COLORS.AZURE,
-                    backgroundColor: CHART_COLORS.AZURE + '20',
-                    borderWidth: 2,
-                    fill: false,
-                    tension: 0.4,
-                },
-            ]
+            datasets: datasets
         },
         options: {
             responsive: true,
@@ -559,7 +714,14 @@ async function loadWasteAlerts() {
         const alertsBody = document.getElementById('waste-alerts-body');
         alertsBody.innerHTML = '<tr><td colspan="7" class="loading">Loading waste alerts...</td></tr>';
         
-        const alerts = await getWasteAlerts();
+        // Read global filters
+        const filters = {
+            providerId: document.getElementById('provider-filter')?.value || '',
+            serviceId: document.getElementById('service-filter')?.value || '',
+            clientId: document.getElementById('client-filter')?.value || '',
+        };
+        
+        const alerts = await getWasteAlerts(filters);
         
         if (alerts.length === 0) {
             alertsBody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: #10b981;">No waste detected! Your resources are well-optimized.</td></tr>';
@@ -701,7 +863,14 @@ async function loadRecommendations() {
         const container = document.getElementById('recommendations-container');
         container.innerHTML = '<div class="loading">Loading recommendations...</div>';
         
-        const recommendations = await getRecommendations();
+        // Read global filters
+        const filters = {
+            providerId: document.getElementById('provider-filter')?.value || '',
+            serviceId: document.getElementById('service-filter')?.value || '',
+            clientId: document.getElementById('client-filter')?.value || '',
+        };
+        
+        const recommendations = await getRecommendations(filters);
         
         if (recommendations.length === 0) {
             container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No optimization recommendations at this time.</p>';
@@ -748,7 +917,7 @@ async function loadSettings() {
 // Save Budget Settings (Event Handler)
 async function handleSaveBudgetSettings() {
     try {
-        const clientId = document.getElementById('client-select').value;
+        const clientId = document.getElementById('client-filter').value;
         const budgetAmount = parseFloat(document.getElementById('budget-amount').value);
         const monthlyLimit = parseFloat(document.getElementById('monthly-limit').value);
         const alertThreshold = parseInt(document.getElementById('alert-threshold').value);
@@ -756,7 +925,7 @@ async function handleSaveBudgetSettings() {
         
         // Validation
         if (!clientId) {
-            showError('Please select a client');
+            showError('Please select a client from the navbar');
             return;
         }
         
@@ -784,13 +953,12 @@ async function handleSaveBudgetSettings() {
         if (result.status === 'ok') {
             alert('Budget settings saved successfully!');
             // Clear form
-            document.getElementById('client-select').value = '';
             document.getElementById('budget-amount').value = '';
             document.getElementById('monthly-limit').value = '';
         }
     } catch (error) {
         console.error('Error saving budget settings:', error);
-        showError('Failed to save budget settings. Please try again.');
+        showError('Budget save requires backend POST /budgets endpoint (not yet implemented). Please contact the Backend Lead.');
     }
 }
 
@@ -809,7 +977,7 @@ async function exportData(format) {
         // Simulate progress
         progressFill.style.width = '30%';
         
-        const dateRange = parseInt(document.getElementById('export-date-range').value);
+        const dateRange = currentDateRange;
         const data = await getDashboardData(dateRange);
         
         progressFill.style.width = '60%';

@@ -27,7 +27,51 @@
             <li><a href="#recommendations" class="nav-link" data-page="recommendations">Recommendations</a></li>
             <li><a href="#settings" class="nav-link" data-page="settings">Settings</a></li>
         </ul>
+        <button id="filter-toggle" class="filter-toggle-btn">
+            ⚙ Filters <span id="active-filter-count" class="filter-count hidden">0</span>
+        </button>
+        <div class="navbar-client">
+            <label for="client-filter">Client</label>
+            <select id="client-filter" class="filter-select">
+                <option value="">All Clients</option>
+            </select>
+        </div>
     </nav>
+
+    <!-- Global Filter Drawer (persists across all pages) -->
+    <div id="filter-drawer" class="filter-drawer hidden">
+        <div class="filter-drawer-inner">
+            <div class="filter-group">
+                <label>Date Range</label>
+                <select id="date-range-selector" class="filter-select">
+                    <option value="7">Last 7 Days</option>
+                    <option value="30" selected>Last 30 Days</option>
+                    <option value="60">Last 60 Days</option>
+                    <option value="90">Last 90 Days</option>
+                </select>
+            </div>
+            <div class="drawer-separator"></div>
+            <div class="filter-group">
+                <label>Provider</label>
+                <select id="provider-filter" class="filter-select">
+                    <option value="">All Providers</option>
+                    <option value="2001">AWS</option>
+                    <option value="2002">Azure</option>
+                    <option value="2003">GCP</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Service Type</label>
+                <select id="service-filter" class="filter-select">
+                    <option value="">All Services</option>
+                </select>
+            </div>
+            <div class="filter-actions">
+                <button id="apply-filters" class="btn-primary">Apply</button>
+                <button id="clear-filters" class="btn-secondary">Clear</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Component 9: ErrorDisplay (hidden by default) -->
     <div id="error-display" class="error-display hidden">
@@ -46,12 +90,6 @@
             <div class="dashboard-header">
                 <h2>Cost Overview</h2>
                 <div class="dashboard-controls">
-                    <select id="date-range-selector" class="date-selector">
-                        <option value="7">Last 7 Days</option>
-                        <option value="30" selected>Last 30 Days</option>
-                        <option value="60">Last 60 Days</option>
-                        <option value="90">Last 90 Days</option>
-                    </select>
                     <button id="refresh-button" class="btn-refresh">↻ Refresh</button>
                 </div>
             </div>
@@ -85,34 +123,33 @@
                 </div>
             </div>
 
-            <!-- Component 3: FilterPanel -->
-            <div class="filter-panel">
-                <h3>Filters</h3>
-                <div class="filters">
-                    <div class="filter-group">
-                        <label>Provider</label>
-                        <select id="provider-filter" class="filter-select">
-                            <option value="">All Providers</option>
-                            <option value="2001">AWS</option>
-                            <option value="2002">Azure</option>
-                            <option value="2003">GCP</option>
-                        </select>
+            <!-- Component 10: Resource Metrics (FR-08) -->
+            <div class="resource-metrics">
+                <h3>Resource Metrics</h3>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <span class="metric-label">Avg Daily Cost</span>
+                        <span class="metric-value" id="avg-daily-cost">$0.00</span>
                     </div>
-                    <div class="filter-group">
-                        <label>Service Type</label>
-                        <select id="service-filter" class="filter-select">
-                            <option value="">All Services</option>
-                        </select>
+                    <div class="metric-card">
+                        <span class="metric-label">Max Daily Cost</span>
+                        <span class="metric-value" id="max-daily-cost">$0.00</span>
                     </div>
-                    <div class="filter-group">
-                        <label>Client</label>
-                        <select id="client-filter" class="filter-select">
-                            <option value="">All Clients</option>
-                        </select>
+                    <div class="metric-card">
+                        <span class="metric-label">Active Services</span>
+                        <span class="metric-value" id="active-services">0</span>
                     </div>
-                    <div class="filter-actions">
-                        <button id="apply-filters" class="btn-primary">Apply Filters</button>
-                        <button id="clear-filters" class="btn-secondary">Clear</button>
+                    <div class="metric-card">
+                        <span class="metric-label">Avg Cost / Service</span>
+                        <span class="metric-value" id="avg-cost-per-service">$0.00</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Total Units Used</span>
+                        <span class="metric-value" id="total-units-used">0</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Avg Units / Day</span>
+                        <span class="metric-value" id="avg-units-per-day">0</span>
                     </div>
                 </div>
             </div>
@@ -178,13 +215,6 @@
             
             <div class="settings-form">
                 <div class="form-group">
-                    <label for="client-select">Client</label>
-                    <select id="client-select" class="form-control">
-                        <option value="">Select a client</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
                     <label for="budget-amount">Monthly Budget ($)</label>
                     <input type="number" id="budget-amount" class="form-control" placeholder="5000.00" step="0.01">
                 </div>
@@ -218,15 +248,6 @@
             <div class="export-section">
                 <h3>Export Reports</h3>
                 <div class="export-controls">
-                    <div class="export-options">
-                        <label>Date Range</label>
-                        <select id="export-date-range" class="form-control">
-                            <option value="7">Last 7 Days</option>
-                            <option value="30" selected>Last 30 Days</option>
-                            <option value="60">Last 60 Days</option>
-                            <option value="90">Last 90 Days</option>
-                        </select>
-                    </div>
                     <div class="export-buttons">
                         <button id="export-csv" class="btn-export">Export CSV</button>
                         <button id="export-pdf" class="btn-export">Export PDF</button>
