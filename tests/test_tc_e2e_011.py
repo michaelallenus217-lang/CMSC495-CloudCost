@@ -37,7 +37,7 @@ class TestE2E011:
         # Step 2: Get client list from API
         print("\n  Step 2: Get clients from API")
         clients_resp = requests.get(f"{API_URL}/clients", timeout=30)
-        clients = clients_resp.json().get("clients", [])
+        clients = clients_resp.json().get("data", [])
         print(f"    ✓ Found {len(clients)} clients in database")
         
         if len(clients) < 2:
