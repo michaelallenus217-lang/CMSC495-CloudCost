@@ -186,7 +186,7 @@ async function populateFilters(services = null, providers = null) {
             ]);
             services = servicesResponse.services || [];
             providers = providersResponse.providers || [];
-            const clients = clientsResponse.clients || [];
+            const clients = clientsResponse || [];
             
             // Populate clients dropdown in settings
             const clientSelect = document.getElementById('client-select');
@@ -195,7 +195,7 @@ async function populateFilters(services = null, providers = null) {
                 clients.forEach(client => {
                     const option = document.createElement('option');
                     option.value = client.client_id;
-                    option.textContent = client.client_name;
+                    option.textContent = formatClientName(client.client_name);
                     clientSelect.appendChild(option);
                 });
             }
@@ -227,13 +227,13 @@ async function populateFilters(services = null, providers = null) {
         const clientFilter = document.getElementById('client-filter');
         if (clientFilter) {
             const clientsResponse = await getClients();
-            const clients = clientsResponse.clients || [];
+            const clients = clientsResponse || [];
             
             clientFilter.innerHTML = '<option value="">All Clients</option>';
             clients.forEach(client => {
                 const option = document.createElement('option');
                 option.value = client.client_id;
-                option.textContent = client.client_name;
+                option.textContent = formatClientName(client.client_name);
                 clientFilter.appendChild(option);
             });
         }

@@ -256,3 +256,12 @@ function exportToCSV(data, filename) {
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
 }
+// Format "LastFirst" client names as "First Last"
+function formatClientName(name) {
+    if (!name) return 'N/A';
+    const parts = name.match(/[A-Z][a-z]+/g);
+    if (parts && parts.length >= 2) {
+        return parts.slice(1).join(' ') + ' ' + parts[0];
+    }
+    return name;
+}
