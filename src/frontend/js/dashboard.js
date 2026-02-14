@@ -108,17 +108,34 @@ function setupEventListeners() {
         loadDashboard();
     });
     
-    // Date range selector
+    // Filter drawer toggle
+    document.getElementById('filter-toggle')?.addEventListener('click', () => {
+        const drawer = document.getElementById('filter-drawer');
+        const toggle = document.getElementById('filter-toggle');
+        if (drawer) {
+            drawer.classList.toggle('hidden');
+            drawer.classList.toggle('open');
+            toggle.classList.toggle('active');
+        }
+    });
+
+    // Date range selector (now in global filter drawer)
     document.getElementById('date-range-selector')?.addEventListener('change', (e) => {
         currentDateRange = parseInt(e.target.value);
-        document.getElementById('export-date-range').value = currentDateRange;
         unfilteredDashboardData = null; // Clear cache when date range changes
         loadDashboard();
+        updateActiveFilterCount();
     });
     
     // Filter buttons
-    document.getElementById('apply-filters')?.addEventListener('click', applyFilters);
-    document.getElementById('clear-filters')?.addEventListener('click', clearFilters);
+    document.getElementById('apply-filters')?.addEventListener('click', () => {
+        applyFilters();
+        updateActiveFilterCount();
+    });
+    document.getElementById('clear-filters')?.addEventListener('click', () => {
+        clearFilters();
+        updateActiveFilterCount();
+    });
     
     // Provider filter cascading (optional enhancement)
     document.getElementById('provider-filter')?.addEventListener('change', (e) => {
@@ -187,7 +204,7 @@ async function populateFilters(services = null, providers = null) {
             ]);
             services = servicesResponse.services || [];
             providers = providersResponse.providers || [];
-            const clients = clientsResponse || [];
+            const clients = clientsResponse.clients || [];
             
             // Populate clients dropdown in settings
             const clientSelect = document.getElementById('client-select');
@@ -196,7 +213,7 @@ async function populateFilters(services = null, providers = null) {
                 clients.forEach(client => {
                     const option = document.createElement('option');
                     option.value = client.client_id;
-                    option.textContent = formatClientName(client.client_name);
+                    option.textContent = client.client_name;
                     clientSelect.appendChild(option);
                 });
             }
@@ -228,13 +245,13 @@ async function populateFilters(services = null, providers = null) {
         const clientFilter = document.getElementById('client-filter');
         if (clientFilter) {
             const clientsResponse = await getClients();
-            const clients = clientsResponse || [];
+            const clients = clientsResponse.clients || [];
             
             clientFilter.innerHTML = '<option value="">All Clients</option>';
             clients.forEach(client => {
                 const option = document.createElement('option');
                 option.value = client.client_id;
-                option.textContent = formatClientName(client.client_name);
+                option.textContent = client.client_name;
                 clientFilter.appendChild(option);
             });
         }
@@ -294,7 +311,7 @@ async function applyFilters() {
         
         // If no results after filtering, show message
         if (filteredUsages.length === 0) {
-            showError('No usage records match this filter combination. Try adjusting your selections.');
+            showError('No data found for the selected filters. Try different filter combinations.');
             return;
         }
         
@@ -340,7 +357,7 @@ function calculateDashboardMetrics(usages, services, providers) {
     usages.forEach(usage => {
         const date = usage.usage_date;
         if (!costsByDate[date]) {
-            costsByDate[date] = { date, total: 0, aws: 0, azure: 0 };
+            costsByDate[date] = { date, total: 0, aws: 0, azure: 0, gcp: 0 };
         }
         
         const service = services.find(s => s.service_id === usage.service_id);
@@ -350,6 +367,8 @@ function calculateDashboardMetrics(usages, services, providers) {
                 costsByDate[date].aws += usage.total_cost;
             } else if (service.provider_id === PROVIDER_IDS.AZURE) {
                 costsByDate[date].azure += usage.total_cost;
+            } else if (service.provider_id === PROVIDER_IDS.GCP) {
+                costsByDate[date].gcp += usage.total_cost;
             }
         }
     });
@@ -435,6 +454,25 @@ function clearFilters() {
     } else {
         // If we don't have cached data, reload
         loadDashboard();
+    }
+}
+
+// Update the active filter count badge in the navbar
+function updateActiveFilterCount() {
+    const badge = document.getElementById('active-filter-count');
+    if (!badge) return;
+    
+    let count = 0;
+    if (document.getElementById('provider-filter')?.value) count++;
+    if (document.getElementById('service-filter')?.value) count++;
+    if (document.getElementById('client-filter')?.value) count++;
+    // Date range doesn't count as a "filter" since it always has a value
+    
+    if (count > 0) {
+        badge.textContent = count;
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
     }
 }
 
@@ -809,7 +847,7 @@ async function exportData(format) {
         // Simulate progress
         progressFill.style.width = '30%';
         
-        const dateRange = parseInt(document.getElementById('export-date-range').value);
+        const dateRange = currentDateRange;
         const data = await getDashboardData(dateRange);
         
         progressFill.style.width = '60%';
