@@ -17,7 +17,7 @@ class PagedSchema(Schema):
     
     limit = fields.Int(
         load_default=10,
-        validate=validate.Range(min=1, max=1000),
+        validate=validate.Range(min=1, max=50000),
     )
 
     page = fields.Int(
