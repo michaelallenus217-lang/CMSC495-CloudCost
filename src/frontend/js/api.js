@@ -317,6 +317,11 @@ async function getBudgets(limit = DEFAULT_LIMIT) {
     return apiResponse.data;
 }
 
+async function getInvoices(limit = DEFAULT_LIMIT) {
+    const apiResponse = await fetchWithMockFallback(ENDPOINTS.INVOICES, { limit }, 'invoices');
+    return apiResponse.data;
+}
+
 async function getBudget(budgetId) {
     if (API_CONFIG.USE_MOCK_DATA) {
         const budget = MOCK_DATA.budgets.find(b => b.budget_id === budgetId);

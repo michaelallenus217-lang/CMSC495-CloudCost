@@ -980,151 +980,350 @@ async function exportData(format) {
         const dateRange = currentDateRange;
         const data = await getDashboardData(dateRange);
         
+        // Apply active filters to export data
+        const activeProviderId = document.getElementById('provider-filter')?.value;
+        const activeServiceId = document.getElementById('service-filter')?.value;
+        const activeClientId = document.getElementById('client-filter')?.value;
+        
+        let exportUsages = data.usages;
+        if (activeClientId) {
+            exportUsages = exportUsages.filter(u => u.client_id === parseInt(activeClientId));
+        }
+        if (activeServiceId) {
+            exportUsages = exportUsages.filter(u => u.service_id === parseInt(activeServiceId));
+        } else if (activeProviderId) {
+            const providerServiceIds = data.services
+                .filter(s => s.provider_id === parseInt(activeProviderId))
+                .map(s => s.service_id);
+            exportUsages = exportUsages.filter(u => providerServiceIds.includes(u.service_id));
+        }
+        
+        // Use filtered usages for export
+        data.usages = exportUsages;
+        
         progressFill.style.width = '60%';
         progressText.textContent = 'Generating file...';
         
         if (format === 'csv') {
-            const exportData = data.usages.map(u => {
+            // Fetch client lookup for IT manager report
+            progressText.textContent = 'Loading client data...';
+            const clientsResponse = await getClients();
+            const clients = clientsResponse || [];
+            const clientMap = {};
+            clients.forEach(c => { clientMap[c.client_id] = c.client_name; });
+
+            progressFill.style.width = '50%';
+            progressText.textContent = 'Building cost analysis report...';
+
+            // Build service-level daily aggregation for IT manager view
+            // Group by: date + client + provider + service
+            const aggregation = {};
+            data.usages.forEach(u => {
                 const service = data.services.find(s => s.service_id === u.service_id);
                 const provider = data.providers.find(p => p.provider_id === service?.provider_id);
-                
-                return {
-                    Date: u.usage_date,
-                    Provider: provider?.provider_name || 'Unknown',
-                    Service: service?.service_name || 'Unknown',
-                    'Units Used': u.units_used,
-                    Cost: u.total_cost,
-                };
+                const key = `${u.usage_date}|${u.client_id}|${u.service_id}`;
+
+                if (!aggregation[key]) {
+                    aggregation[key] = {
+                        date: u.usage_date,
+                        clientName: clientMap[u.client_id] || 'Unknown',
+                        providerName: provider?.provider_name || 'Unknown',
+                        serviceName: service?.service_name || 'Unknown',
+                        serviceType: service?.service_type || 'Unknown',
+                        serviceUnit: service?.service_unit || 'unit',
+                        unitCost: parseFloat(service?.service_cost) || 0,
+                        totalUnits: 0,
+                        totalCost: 0,
+                        recordCount: 0,
+                    };
+                }
+                aggregation[key].totalUnits += u.units_used;
+                aggregation[key].totalCost += u.total_cost;
+                aggregation[key].recordCount += 1;
             });
-            
+
+            progressFill.style.width = '70%';
+
+            // Convert to sorted array and compute utilization + waste
+            const rows = Object.values(aggregation)
+                .sort((a, b) => a.date.localeCompare(b.date) || a.clientName.localeCompare(b.clientName))
+                .map(row => {
+                    // Utilization: ratio of actual cost to potential cost at full unit usage
+                    // Estimated capacity = units * 1.5 (assumed provisioned headroom)
+                    const estimatedCapacity = row.totalUnits * 1.5;
+                    const utilization = estimatedCapacity > 0 ? (row.totalUnits / estimatedCapacity) : 0;
+                    const wasteFlag = utilization < 0.5 ? 'Underutilized' : (utilization < 0.75 ? 'Review' : 'Optimal');
+                    const potentialSavings = wasteFlag === 'Underutilized' ? row.totalCost * 0.30 :
+                                            wasteFlag === 'Review' ? row.totalCost * 0.10 : 0;
+
+                    return {
+                        'Date': row.date,
+                        'Client': row.clientName,
+                        'Provider': row.providerName,
+                        'Service': row.serviceName,
+                        'Service Type': row.serviceType,
+                        'Units Used': row.totalUnits.toFixed(2),
+                        'Unit': row.serviceUnit,
+                        'Unit Cost ($)': row.unitCost.toFixed(2),
+                        'Total Cost ($)': row.totalCost.toFixed(2),
+                        'Utilization (%)': (utilization * 100).toFixed(1),
+                        'Status': wasteFlag,
+                        'Est. Savings ($)': potentialSavings.toFixed(2),
+                    };
+                });
+
             progressFill.style.width = '90%';
-            
-            exportToCSV(exportData, `cloud-costs-${dateRange}days-${new Date().toISOString().split('T')[0]}.csv`);
+
+            exportToCSV(rows, `cost-analysis-report-${dateRange}days-${new Date().toISOString().split('T')[0]}.csv`);
             
             progressFill.style.width = '100%';
-            progressText.textContent = 'Export complete!';
+            progressText.textContent = `Export complete! ${rows.length} records exported.`;
             
             setTimeout(() => {
                 progressDiv.classList.add('hidden');
             }, 2000);
         } else if (format === 'pdf') {
-            // PDF Export Implementation
-            progressFill.style.width = '70%';
-            progressText.textContent = 'Generating PDF...';
+            // Invoice-Style PDF Export (Finance Persona)
+            progressFill.style.width = '50%';
+            progressText.textContent = 'Loading invoice data...';
             
             try {
-                // Access jsPDF from window
+                // Fetch invoice and client data
+                const [invoices, clientsResponse] = await Promise.all([
+                    getInvoices(),
+                    getClients(),
+                ]);
+                const clients = clientsResponse || [];
+                const clientMap = {};
+                clients.forEach(c => { clientMap[c.client_id] = c.client_name; });
+
+                // Determine which client(s) to invoice
+                const selectedClientId = document.getElementById('client-filter')?.value;
+                const filteredInvoices = selectedClientId
+                    ? invoices.filter(inv => inv.client_id === parseInt(selectedClientId))
+                    : invoices;
+
+                if (filteredInvoices.length === 0) {
+                    showError('No invoices found. Select a client with invoice history.');
+                    progressDiv.classList.add('hidden');
+                    return;
+                }
+
+                progressFill.style.width = '70%';
+                progressText.textContent = 'Generating invoice PDF...';
+
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF();
-                
-                // Title
-                doc.setFontSize(20);
-                doc.setTextColor(40, 40, 40);
-                doc.text('Cloud Cost Intelligence Report', 14, 22);
-                
-                // Date range and generation info
-                doc.setFontSize(10);
-                doc.setTextColor(100, 100, 100);
-                doc.text(`Date Range: Last ${dateRange} days`, 14, 30);
-                doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 35);
-                
-                // Summary Section
-                doc.setFontSize(14);
-                doc.setTextColor(40, 40, 40);
-                doc.text('Cost Summary', 14, 45);
-                
-                // Summary table
-                const summaryData = [
-                    ['Total Spend', formatCurrency(data.totalCost)],
-                    ['AWS Costs', formatCurrency(data.awsCost)],
-                    ['Azure Costs', formatCurrency(data.azureCost)],
-                ];
-                
-                doc.autoTable({
-                    startY: 50,
-                    head: [['Metric', 'Amount']],
-                    body: summaryData,
-                    theme: 'striped',
-                    headStyles: { fillColor: [37, 99, 235] },
-                    margin: { left: 14 },
-                });
-                
-                // Usage Details Section
-                let finalY = doc.lastAutoTable.finalY + 10;
-                doc.setFontSize(14);
-                doc.text('Usage Details', 14, finalY);
-                
-                // Prepare usage data for table
-                const usageTableData = data.usages.slice(0, 50).map(u => {
-                    const service = data.services.find(s => s.service_id === u.service_id);
-                    const provider = data.providers.find(p => p.provider_id === service?.provider_id);
-                    
-                    return [
-                        u.usage_date,
-                        provider?.provider_name || 'Unknown',
-                        service?.service_name || 'Unknown',
-                        u.units_used.toFixed(2),
-                        formatCurrency(u.total_cost),
-                    ];
-                });
-                
-                doc.autoTable({
-                    startY: finalY + 5,
-                    head: [['Date', 'Provider', 'Service', 'Units Used', 'Cost']],
-                    body: usageTableData,
-                    theme: 'grid',
-                    headStyles: { fillColor: [37, 99, 235] },
-                    styles: { fontSize: 8 },
-                    columnStyles: {
-                        0: { cellWidth: 25 },
-                        1: { cellWidth: 25 },
-                        2: { cellWidth: 60 },
-                        3: { cellWidth: 25 },
-                        4: { cellWidth: 25 },
-                    },
-                    margin: { left: 14, right: 14 },
-                });
-                
-                // Provider Breakdown (if space allows)
-                finalY = doc.lastAutoTable.finalY + 10;
-                if (finalY < 250) {
-                    doc.setFontSize(14);
-                    doc.text('Provider Breakdown', 14, finalY);
-                    
-                    const providerData = [
-                        ['AWS', formatCurrency(data.awsCost), `${((data.awsCost / data.totalCost) * 100).toFixed(1)}%`],
-                        ['Azure', formatCurrency(data.azureCost), `${((data.azureCost / data.totalCost) * 100).toFixed(1)}%`],
-                    ];
-                    
-                    doc.autoTable({
-                        startY: finalY + 5,
-                        head: [['Provider', 'Total Cost', 'Percentage']],
-                        body: providerData,
-                        theme: 'striped',
-                        headStyles: { fillColor: [37, 99, 235] },
-                        margin: { left: 14 },
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const brandColor = [37, 99, 235];
+                const darkGray = [40, 40, 40];
+                const midGray = [100, 100, 100];
+                const lightGray = [200, 200, 200];
+
+                // Aggregate line items from usages by service for each client
+                const buildLineItems = (clientId) => {
+                    const clientUsages = data.usages.filter(u => u.client_id === clientId);
+                    const byService = {};
+                    clientUsages.forEach(u => {
+                        const service = data.services.find(s => s.service_id === u.service_id);
+                        const provider = data.providers.find(p => p.provider_id === service?.provider_id);
+                        const key = u.service_id;
+                        if (!byService[key]) {
+                            byService[key] = {
+                                provider: provider?.provider_name || 'Unknown',
+                                service: service?.service_name || 'Unknown',
+                                type: service?.service_type || 'Unknown',
+                                unit: service?.service_unit || 'unit',
+                                unitCost: parseFloat(service?.service_cost) || 0,
+                                totalUnits: 0,
+                                totalCost: 0,
+                            };
+                        }
+                        byService[key].totalUnits += u.units_used;
+                        byService[key].totalCost += u.total_cost;
                     });
-                }
-                
-                // Footer
+                    return Object.values(byService).sort((a, b) => b.totalCost - a.totalCost);
+                };
+
+                // Group invoices by client for multi-page support
+                const clientIds = [...new Set(filteredInvoices.map(inv => inv.client_id))];
+                let isFirstPage = true;
+
+                clientIds.forEach(clientId => {
+                    const clientInvoices = filteredInvoices
+                        .filter(inv => inv.client_id === clientId)
+                        .sort((a, b) => b.invoice_date.localeCompare(a.invoice_date));
+                    const latestInvoice = clientInvoices[0];
+                    const clientName = clientMap[clientId] || 'Unknown Client';
+                    const lineItems = buildLineItems(clientId);
+
+                    if (!isFirstPage) doc.addPage();
+                    isFirstPage = false;
+
+                    // Header band
+                    doc.setFillColor(...brandColor);
+                    doc.rect(0, 0, pageWidth, 40, 'F');
+
+                    doc.setFontSize(22);
+                    doc.setTextColor(255, 255, 255);
+                    doc.text('INVOICE', 14, 18);
+
+                    doc.setFontSize(10);
+                    doc.text('Cloud Cost Intelligence Platform', 14, 26);
+                    doc.text('The Code Collective', 14, 32);
+
+                    // Invoice meta (right side)
+                    doc.setFontSize(9);
+                    doc.text('Invoice #: ' + latestInvoice.invoice_id, pageWidth - 14, 18, { align: 'right' });
+                    doc.text('Date: ' + latestInvoice.invoice_date, pageWidth - 14, 24, { align: 'right' });
+                    doc.text('Generated: ' + new Date().toLocaleDateString(), pageWidth - 14, 30, { align: 'right' });
+
+                    // Bill To
+                    let y = 50;
+                    doc.setFontSize(9);
+                    doc.setTextColor(...midGray);
+                    doc.text('BILL TO', 14, y);
+                    doc.setFontSize(12);
+                    doc.setTextColor(...darkGray);
+                    doc.text(clientName, 14, y + 7);
+
+                    // Invoice period (right side)
+                    doc.setFontSize(9);
+                    doc.setTextColor(...midGray);
+                    doc.text('INVOICE PERIOD', pageWidth - 14, y, { align: 'right' });
+                    const invoiceDates = clientInvoices.map(inv => inv.invoice_date).sort();
+                    doc.setFontSize(10);
+                    doc.setTextColor(...darkGray);
+                    doc.text(invoiceDates[0] + ' to ' + invoiceDates[invoiceDates.length - 1], pageWidth - 14, y + 7, { align: 'right' });
+
+                    // Invoice Amount Box
+                    y = 70;
+                    const invoiceTotal = clientInvoices.reduce((sum, inv) => sum + parseFloat(inv.invoice_amount), 0);
+                    doc.setFillColor(245, 247, 250);
+                    doc.roundedRect(14, y, pageWidth - 28, 18, 2, 2, 'F');
+                    doc.setFontSize(10);
+                    doc.setTextColor(...midGray);
+                    doc.text('AMOUNT DUE', 20, y + 8);
+                    doc.setFontSize(16);
+                    doc.setTextColor(...darkGray);
+                    doc.text(formatCurrency(invoiceTotal), pageWidth - 20, y + 12, { align: 'right' });
+
+                    // Line Items Table
+                    y = 96;
+                    const lineItemRows = lineItems.map(item => [
+                        item.provider,
+                        item.service,
+                        item.type,
+                        item.totalUnits.toFixed(1) + ' ' + item.unit,
+                        '$' + item.unitCost.toFixed(2) + '/' + item.unit,
+                        '$' + item.totalCost.toFixed(2),
+                    ]);
+
+                    doc.autoTable({
+                        startY: y,
+                        head: [['Provider', 'Service', 'Type', 'Usage', 'Rate', 'Amount']],
+                        body: lineItemRows,
+                        theme: 'grid',
+                        headStyles: {
+                            fillColor: brandColor,
+                            textColor: [255, 255, 255],
+                            fontStyle: 'bold',
+                            fontSize: 8,
+                        },
+                        styles: { fontSize: 8, cellPadding: 3 },
+                        columnStyles: {
+                            0: { cellWidth: 25 },
+                            1: { cellWidth: 35 },
+                            2: { cellWidth: 30 },
+                            3: { cellWidth: 30, halign: 'right' },
+                            4: { cellWidth: 25, halign: 'right' },
+                            5: { cellWidth: 25, halign: 'right' },
+                        },
+                        margin: { left: 14, right: 14 },
+                    });
+
+                    // Totals Section
+                    let finalY = doc.lastAutoTable.finalY + 5;
+                    const usageTotal = lineItems.reduce((sum, item) => sum + item.totalCost, 0);
+                    const potentialSavings = usageTotal * 0.15;
+
+                    const totalsData = [
+                        ['Subtotal (Usage)', '$' + usageTotal.toFixed(2)],
+                        ['Invoice Amount', '$' + invoiceTotal.toFixed(2)],
+                        ['Est. Optimization Savings', '-$' + potentialSavings.toFixed(2)],
+                    ];
+
+                    doc.autoTable({
+                        startY: finalY,
+                        body: totalsData,
+                        theme: 'plain',
+                        styles: { fontSize: 9, cellPadding: 2 },
+                        columnStyles: {
+                            0: { cellWidth: 50, fontStyle: 'bold', halign: 'right' },
+                            1: { cellWidth: 30, halign: 'right' },
+                        },
+                        margin: { left: pageWidth - 100 },
+                    });
+
+                    // Provider Breakdown
+                    finalY = doc.lastAutoTable.finalY + 10;
+                    if (finalY < 240) {
+                        doc.setFontSize(11);
+                        doc.setTextColor(...darkGray);
+                        doc.text('Cost by Provider', 14, finalY);
+
+                        const providerTotals = {};
+                        lineItems.forEach(item => {
+                            providerTotals[item.provider] = (providerTotals[item.provider] || 0) + item.totalCost;
+                        });
+
+                        const providerRows = Object.entries(providerTotals)
+                            .sort((a, b) => b[1] - a[1])
+                            .map(([name, cost]) => [
+                                name,
+                                '$' + cost.toFixed(2),
+                                usageTotal > 0 ? ((cost / usageTotal) * 100).toFixed(1) + '%' : '0%',
+                            ]);
+
+                        doc.autoTable({
+                            startY: finalY + 4,
+                            head: [['Provider', 'Total', '% of Spend']],
+                            body: providerRows,
+                            theme: 'striped',
+                            headStyles: { fillColor: brandColor, fontSize: 8 },
+                            styles: { fontSize: 8 },
+                            columnStyles: {
+                                1: { halign: 'right' },
+                                2: { halign: 'right' },
+                            },
+                            margin: { left: 14 },
+                            tableWidth: 100,
+                        });
+                    }
+                });
+
+                // Footer on all pages
                 const pageCount = doc.internal.getNumberOfPages();
                 for (let i = 1; i <= pageCount; i++) {
                     doc.setPage(i);
-                    doc.setFontSize(8);
+                    doc.setDrawColor(...lightGray);
+                    doc.line(14, doc.internal.pageSize.getHeight() - 16, pageWidth - 14, doc.internal.pageSize.getHeight() - 16);
+                    doc.setFontSize(7);
                     doc.setTextColor(150);
                     doc.text(
-                        `Page ${i} of ${pageCount} | Cloud Cost Intelligence Platform | © 2026 The Code Collective`,
-                        doc.internal.pageSize.getWidth() / 2,
+                        'Page ' + i + ' of ' + pageCount + '  |  Cloud Cost Intelligence Platform  |  \u00a9 2026 The Code Collective',
+                        pageWidth / 2,
                         doc.internal.pageSize.getHeight() - 10,
                         { align: 'center' }
                     );
                 }
-                
+
                 progressFill.style.width = '100%';
                 progressText.textContent = 'Download starting...';
-                
-                // Save the PDF
-                doc.save(`cloud-costs-report-${dateRange}days-${new Date().toISOString().split('T')[0]}.pdf`);
+
+                // Filename reflects client if filtered
+                const clientLabel = selectedClientId ? (clientMap[parseInt(selectedClientId)] || 'client') : 'all-clients';
+                doc.save('invoice-' + clientLabel + '-' + new Date().toISOString().split('T')[0] + '.pdf');
                 
                 setTimeout(() => {
                     progressDiv.classList.add('hidden');
