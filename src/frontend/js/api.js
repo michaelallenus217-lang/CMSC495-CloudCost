@@ -345,7 +345,7 @@ async function checkHealth() {
 async function getDashboardData(days = 30) {
     try {
         const [usages, providers, services] = await Promise.all([
-            getUsages(DEFAULT_LIMIT),
+            getUsages(1000),
             getProviders(),
             getServices(),
         ]);
