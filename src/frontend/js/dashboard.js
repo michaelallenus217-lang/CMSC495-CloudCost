@@ -1005,83 +1005,179 @@ async function exportData(format) {
         progressText.textContent = 'Generating file...';
         
         if (format === 'csv') {
-            // Fetch client lookup for IT manager report
-            progressText.textContent = 'Loading client data...';
+            // === OPTION B: "The Analyst's Workbook" — 20-column flat CSV ===
+            progressText.textContent = 'Loading reference data...';
             const clientsResponse = await getClients();
             const clients = clientsResponse || [];
             const clientMap = {};
             clients.forEach(c => { clientMap[c.client_id] = c.client_name; });
 
             progressFill.style.width = '50%';
-            progressText.textContent = 'Building cost analysis report...';
+            progressText.textContent = 'Building cross-provider rate map...';
 
-            // Build service-level daily aggregation for IT manager view
-            // Group by: date + client + provider + service
-            const aggregation = {};
-            data.usages.forEach(u => {
-                const service = data.services.find(s => s.service_id === u.service_id);
-                const provider = data.providers.find(p => p.provider_id === service?.provider_id);
-                const key = `${u.usage_date}|${u.client_id}|${u.service_id}`;
+            // Build cross-provider rate lookup: service_type -> { AWS: rate, Azure: rate, GCP: rate }
+            const providerNames = {};
+            data.providers.forEach(p => { providerNames[p.provider_id] = p.provider_name; });
 
-                if (!aggregation[key]) {
-                    aggregation[key] = {
-                        date: u.usage_date,
-                        clientName: clientMap[u.client_id] || 'Unknown',
-                        providerName: provider?.provider_name || 'Unknown',
-                        serviceName: service?.service_name || 'Unknown',
-                        serviceType: service?.service_type || 'Unknown',
-                        serviceUnit: service?.service_unit || 'unit',
-                        unitCost: parseFloat(service?.service_cost) || 0,
-                        totalUnits: 0,
-                        totalCost: 0,
-                        recordCount: 0,
-                    };
+            const typeRates = {};
+            data.services.forEach(svc => {
+                const pName = providerNames[svc.provider_id] || 'Unknown';
+                const sType = svc.service_type || 'Unknown';
+                if (!typeRates[sType]) {
+                    typeRates[sType] = { AWS: null, Azure: null, GCP: null, unit: svc.service_unit || 'unit' };
                 }
-                aggregation[key].totalUnits += u.units_used;
-                aggregation[key].totalCost += u.total_cost;
-                aggregation[key].recordCount += 1;
+                const rate = parseFloat(svc.service_cost) || 0;
+                if (pName === 'AWS' && (typeRates[sType].AWS === null || rate < typeRates[sType].AWS)) {
+                    typeRates[sType].AWS = rate;
+                }
+                if (pName === 'Azure' && (typeRates[sType].Azure === null || rate < typeRates[sType].Azure)) {
+                    typeRates[sType].Azure = rate;
+                }
+                if (pName === 'GCP' && (typeRates[sType].GCP === null || rate < typeRates[sType].GCP)) {
+                    typeRates[sType].GCP = rate;
+                }
             });
 
-            progressFill.style.width = '70%';
+            progressFill.style.width = '60%';
+            progressText.textContent = 'Computing trends and forecasts...';
 
-            // Convert to sorted array and compute utilization + waste
-            const rows = Object.values(aggregation)
-                .sort((a, b) => a.date.localeCompare(b.date) || a.clientName.localeCompare(b.clientName))
-                .map(row => {
-                    // Utilization: ratio of actual cost to potential cost at full unit usage
-                    // Estimated capacity = units * 1.5 (assumed provisioned headroom)
-                    const estimatedCapacity = row.totalUnits * 1.5;
-                    const utilization = estimatedCapacity > 0 ? (row.totalUnits / estimatedCapacity) : 0;
-                    const wasteFlag = utilization < 0.5 ? 'Underutilized' : (utilization < 0.75 ? 'Review' : 'Optimal');
-                    const potentialSavings = wasteFlag === 'Underutilized' ? row.totalCost * 0.30 :
-                                            wasteFlag === 'Review' ? row.totalCost * 0.10 : 0;
+            // Pre-compute daily cost per client+service for rolling averages and trends
+            const dailyMap = {};
+            data.usages.forEach(u => {
+                const key = u.client_id + '|' + u.service_id;
+                if (!dailyMap[key]) dailyMap[key] = {};
+                const d = u.usage_date;
+                if (!dailyMap[key][d]) dailyMap[key][d] = { units: 0, cost: 0 };
+                dailyMap[key][d].units += u.units_used;
+                dailyMap[key][d].cost += u.total_cost;
+            });
+
+            // Helper: compute 7-day rolling avg and 30-day trend for a client+service on a date
+            const computeMetrics = (clientId, serviceId, targetDate) => {
+                const key = clientId + '|' + serviceId;
+                const dayData = dailyMap[key] || {};
+                const allDates = Object.keys(dayData).sort();
+
+                const targetIdx = allDates.indexOf(targetDate);
+                if (targetIdx < 0) return { avg7d: 0, trend30d: 0, forecast30d: 0 };
+
+                // 7-day rolling average
+                let sum7 = 0, count7 = 0;
+                for (let i = Math.max(0, targetIdx - 6); i <= targetIdx; i++) {
+                    sum7 += dayData[allDates[i]].cost;
+                    count7++;
+                }
+                const avg7d = count7 > 0 ? sum7 / count7 : 0;
+
+                // 30-day trend: compare last 15 days avg vs prior 15 days avg
+                let recentSum = 0, recentCount = 0, priorSum = 0, priorCount = 0;
+                for (let i = Math.max(0, targetIdx - 14); i <= targetIdx; i++) {
+                    recentSum += dayData[allDates[i]].cost;
+                    recentCount++;
+                }
+                for (let i = Math.max(0, targetIdx - 29); i <= Math.max(0, targetIdx - 15); i++) {
+                    priorSum += dayData[allDates[i]].cost;
+                    priorCount++;
+                }
+                const recentAvg = recentCount > 0 ? recentSum / recentCount : 0;
+                const priorAvg = priorCount > 0 ? priorSum / priorCount : 0;
+                const trend30d = priorAvg > 0 ? ((recentAvg - priorAvg) / priorAvg) * 100 : 0;
+
+                // Forecast: project current daily avg forward 30 days
+                const forecast30d = avg7d * 30;
+
+                return { avg7d, trend30d, forecast30d };
+            };
+
+            progressFill.style.width = '70%';
+            progressText.textContent = 'Building export rows...';
+
+            // Build one row per usage record
+            const rows = data.usages
+                .sort((a, b) => a.usage_date.localeCompare(b.usage_date) || a.client_id - b.client_id)
+                .map(u => {
+                    const service = data.services.find(s => s.service_id === u.service_id);
+                    const providerName = providerNames[service?.provider_id] || 'Unknown';
+                    const serviceType = service?.service_type || 'Unknown';
+                    const serviceUnit = service?.service_unit || 'unit';
+                    const unitCost = parseFloat(service?.service_cost) || 0;
+
+                    const metrics = computeMetrics(u.client_id, u.service_id, u.usage_date);
+
+                    // Cross-provider rates
+                    const rates = typeRates[serviceType] || { AWS: null, Azure: null, GCP: null };
+                    const awsRate = rates.AWS !== null ? rates.AWS : '';
+                    const azureRate = rates.Azure !== null ? rates.Azure : '';
+                    const gcpRate = rates.GCP !== null ? rates.GCP : '';
+
+                    // Cheapest provider for this service type
+                    const available = [];
+                    if (rates.AWS !== null) available.push({ name: 'AWS', rate: rates.AWS });
+                    if (rates.Azure !== null) available.push({ name: 'Azure', rate: rates.Azure });
+                    if (rates.GCP !== null) available.push({ name: 'GCP', rate: rates.GCP });
+                    available.sort((a, b) => a.rate - b.rate);
+
+                    let cheapest = 'N/A';
+                    let switchSavings = 0;
+                    if (available.length > 1) {
+                        const cheapestRate = available[0].rate;
+                        const allSameRate = available.every(a => a.rate === cheapestRate);
+                        if (allSameRate) {
+                            cheapest = 'Tied';
+                        } else {
+                            cheapest = available[0].name;
+                            switchSavings = u.total_cost - (u.units_used * cheapestRate);
+                            if (switchSavings < 0) switchSavings = 0;
+                        }
+                    } else if (available.length === 1) {
+                        cheapest = available[0].name + ' Only';
+                    }
+
+                    // Utilization: estimated capacity = units * 1.5 (provisioned headroom)
+                    const estimatedCapacity = u.units_used * 1.5;
+                    const utilization = estimatedCapacity > 0 ? (u.units_used / estimatedCapacity) : 0;
+                    const status = utilization < 0.5 ? 'Underutilized' : (utilization < 0.75 ? 'Review' : 'Optimal');
+
+                    // Est monthly savings
+                    const wasteRate = status === 'Underutilized' ? 0.30 : (status === 'Review' ? 0.10 : 0);
+                    const estMonthlySavings = metrics.forecast30d * wasteRate;
 
                     return {
-                        'Date': row.date,
-                        'Client': row.clientName,
-                        'Provider': row.providerName,
-                        'Service': row.serviceName,
-                        'Service Type': row.serviceType,
-                        'Units Used': row.totalUnits.toFixed(2),
-                        'Unit': row.serviceUnit,
-                        'Unit Cost ($)': row.unitCost.toFixed(2),
-                        'Total Cost ($)': row.totalCost.toFixed(2),
-                        'Utilization (%)': (utilization * 100).toFixed(1),
-                        'Status': wasteFlag,
-                        'Est. Savings ($)': potentialSavings.toFixed(2),
+                        'Date': u.usage_date,
+                        'Client': clientMap[u.client_id] || 'Unknown',
+                        'Provider': providerName,
+                        'Service': service?.service_name || 'Unknown',
+                        'Service Type': serviceType,
+                        'Unit': serviceUnit,
+                        'Units Used': u.units_used.toFixed(2),
+                        'Unit Cost': unitCost.toFixed(2),
+                        'Total Cost': u.total_cost.toFixed(2),
+                        'Daily Avg (7d)': metrics.avg7d.toFixed(2),
+                        '30d Trend %': (metrics.trend30d >= 0 ? '+' : '') + metrics.trend30d.toFixed(1) + '%',
+                        'Forecast 30d': metrics.forecast30d.toFixed(2),
+                        'AWS Rate': awsRate !== '' ? awsRate.toFixed(2) : 'N/A',
+                        'Azure Rate': azureRate !== '' ? azureRate.toFixed(2) : 'N/A',
+                        'GCP Rate': gcpRate !== '' ? gcpRate.toFixed(2) : 'N/A',
+                        'Cheapest': cheapest,
+                        'Switch Savings': switchSavings.toFixed(2),
+                        'Utilization %': (utilization * 100).toFixed(1) + '%',
+                        'Status': status,
+                        'Est Monthly Savings': estMonthlySavings.toFixed(2),
                     };
                 });
 
             progressFill.style.width = '90%';
 
-            exportToCSV(rows, `cost-analysis-report-${dateRange}days-${new Date().toISOString().split('T')[0]}.csv`);
-            
+            const clientLabel = clientMap[parseInt(document.getElementById('client-filter')?.value)] || 'all-clients';
+            exportToCSV(rows, 'cost-workbook-' + clientLabel + '-' + dateRange + 'days-' + new Date().toISOString().split('T')[0] + '.csv');
+
             progressFill.style.width = '100%';
-            progressText.textContent = `Export complete! ${rows.length} records exported.`;
-            
+            progressText.textContent = 'Export complete! ' + rows.length + ' records exported.';
+
             setTimeout(() => {
                 progressDiv.classList.add('hidden');
             }, 2000);
+
         } else if (format === 'pdf') {
             // Invoice-Style PDF Export (Finance Persona)
             progressFill.style.width = '50%';
