@@ -72,7 +72,9 @@ def get_invoice(invoice_id: int):
             FROM Invoices
             WHERE InvoiceID = :invoice_id
         """),
-        {"invoice_id": invoice_id},
+        {
+            "invoice_id": invoice_id
+        },
     ).fetchone()
 
     if row is None:

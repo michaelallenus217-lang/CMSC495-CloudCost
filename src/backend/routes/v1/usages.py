@@ -75,7 +75,9 @@ def get_usage(usage_id: int):
             FROM Usages
             WHERE UsageID = :usage_id
         """),
-        {"usage_id": usage_id},
+        {
+            "usage_id": usage_id
+        },
     ).fetchone()
 
     if row is None:

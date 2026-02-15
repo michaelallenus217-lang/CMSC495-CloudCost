@@ -66,7 +66,9 @@ def get_budget(budget_id: int):
             FROM Budgets
             WHERE BudgetID = :budget_id
         """),
-        {"budget_id": budget_id},
+        {
+            "budget_id": budget_id
+        },
     ).fetchone()
 
     if row is None:
@@ -126,7 +128,9 @@ def patch_budget(budget_id: int):
             FROM Budgets
             WHERE BudgetID = :budget_id
         """),
-        {"budget_id": budget_id},
+        {
+            "budget_id": budget_id
+        },
     ).fetchone()
 
     if row is None:

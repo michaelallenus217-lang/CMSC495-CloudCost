@@ -114,38 +114,11 @@ You can simply view them in a web browser for convenience as well:
 ### /api/v1/clients/{clientId}
 - **GET**
 
-### /api/v1/invoices
-- **GET**
-  - Query params: `limit`, `page`, `start_date`, `end_date`
-
-### /api/v1/invoices/{invoiceId}
-- **GET**
-
-### /api/v1/providers
-- **GET**
-  - Query params: `limit`, `page`
-
-### /api/v1/providers/{providerId}
-- **GET**
-
-### /api/v1/services
-- **GET**
-  - Query params: `limit`, `page`
-
-### /api/v1/services/{serviceId}
-- **GET**
-
-### /api/v1/usages
-- **GET**
-  - Query params: `limit`, `page`, `start_date`, `end_date`
-
-### /api/v1/usages/{usageId}
-- **GET**
-
-
-## API TODO:
-
 ### /api/v1/clients/{clientId}/budgets
+- **GET**
+  - Query params: `limit`, `page`
+
+### /api/v1/clients/{clientId}/budgets/{budgetId}
 - **GET**
   - Query params: `limit`, `page`
 
@@ -163,6 +136,20 @@ You can simply view them in a web browser for convenience as well:
 ### /api/v1/clients/{clientId}/usages/{usageId}
 - **GET**
 
+### /api/v1/invoices
+- **GET**
+  - Query params: `limit`, `page`, `start_date`, `end_date`
+
+### /api/v1/invoices/{invoiceId}
+- **GET**
+
+### /api/v1/providers
+- **GET**
+  - Query params: `limit`, `page`
+
+### /api/v1/providers/{providerId}
+- **GET**
+
 ### /api/v1/providers/{providerId}/services
 - **GET**
   - Query params: `limit`, `page`
@@ -170,9 +157,23 @@ You can simply view them in a web browser for convenience as well:
 ### /api/v1/providers/{providerId}/services/{serviceId}
 - **GET**
 
+### /api/v1/services
+- **GET**
+  - Query params: `limit`, `page`
+
+### /api/v1/services/{serviceId}
+- **GET**
+
 ### /api/v1/services/{serviceId}/usages
 - **GET**
   - Query params: `limit`, `page`, `start_date`, `end_date`
 
 ### /api/v1/services/{serviceId}/usages/{usageId}
+- **GET**
+
+### /api/v1/usages
+- **GET**
+  - Query params: `limit`, `page`, `start_date`, `end_date`
+
+### /api/v1/usages/{usageId}
 - **GET**
