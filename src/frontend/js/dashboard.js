@@ -990,27 +990,31 @@ async function loadRecommendations() {
             document.getElementById('rec-budget').textContent = budgetAmount > 0 ? formatCurrency(budgetAmount) + '/mo' : 'Not set';
         }
 
-        // Budget vs Optimization bar (only when a specific client is selected)
+        // Optimization bar — always shown when there's spend data.
+        // Budget marker and budget callout auto-hide via .rec-budget-only when no client selected.
         const barEl = document.getElementById('rec-budget-bar');
-        if (hasClient && budgetAmount > 0) {
+        if (currentSpend > 0) {
             const savingsTotal = totals.savings || 0;
             const savingsPct = ((savingsTotal / currentSpend) * 100).toFixed(0);
-            const maxVal = currentSpend * 1.15; // 15% padding so current marker isn't on the edge
+            const maxVal = currentSpend * 1.15;
             const optimizedPct = ((optimizedSpend / maxVal) * 100).toFixed(1);
-            const budgetPctVal = ((budgetAmount / maxVal) * 100).toFixed(1);
             const currentPct = ((currentSpend / maxVal) * 100).toFixed(1);
-            const diff = budgetAmount - optimizedSpend;
 
             // Gradient fill spans full track
             document.getElementById('rec-bar-fill').style.width = '100%';
 
-            // Position markers
+            // Position Optimized and Current markers (always visible)
             document.getElementById('rec-marker-optimized').style.left = optimizedPct + '%';
             document.getElementById('rec-marker-optimized-val').textContent = formatCurrency(optimizedSpend);
-            document.getElementById('rec-marker-budget').style.left = budgetPctVal + '%';
-            document.getElementById('rec-marker-budget-val').textContent = formatCurrency(budgetAmount);
             document.getElementById('rec-marker-current').style.left = currentPct + '%';
             document.getElementById('rec-marker-current-val').textContent = formatCurrency(currentSpend);
+
+            // Position Budget marker (hidden by .rec-budget-only when no client)
+            if (hasClient && budgetAmount > 0) {
+                const budgetPctVal = ((budgetAmount / maxVal) * 100).toFixed(1);
+                document.getElementById('rec-marker-budget').style.left = budgetPctVal + '%';
+                document.getElementById('rec-marker-budget-val').textContent = formatCurrency(budgetAmount);
+            }
 
             // Scale ticks
             const scaleEl = document.getElementById('rec-bar-scale');
@@ -1024,24 +1028,26 @@ async function loadRecommendations() {
             }
             scaleEl.innerHTML = ticks.map(t => `<span class="rec-bar-tick">${t}</span>`).join('');
 
-            // Summary callouts
+            // Summary callouts — savings line always, budget line only with client
             const summaryEl = document.getElementById('rec-bar-summary');
             let budgetLine = '';
-            if (totals.budgetShortfall > 0) {
-                // Can't reach budget even with all optimizations
-                budgetLine = `<span class="rec-callout rec-callout-bad">⚠ Still ${formatCurrency(totals.budgetShortfall)}/mo over budget after all optimizations — recommend increasing budget to ${formatCurrency(totals.recommendedBudget)}/mo</span>`;
-            } else if (diff > 0) {
-                budgetLine = `<span class="rec-callout rec-callout-good">✓ Optimization lands ${formatCurrency(diff)}/mo under budget</span>`;
-            } else if (diff < 0) {
-                budgetLine = `<span class="rec-callout rec-callout-bad">⚠ Still ${formatCurrency(Math.abs(diff))}/mo over budget after all optimizations</span>`;
-            } else {
-                budgetLine = `<span class="rec-callout rec-callout-good">✓ Meets budget exactly</span>`;
+            if (hasClient && budgetAmount > 0) {
+                const diff = budgetAmount - optimizedSpend;
+                if (totals.budgetShortfall > 0) {
+                    budgetLine = `<div class="rec-callout-row"><span class="rec-callout rec-callout-bad">⚠ Still ${formatCurrency(totals.budgetShortfall)}/mo over budget after all optimizations — recommend increasing budget to ${formatCurrency(totals.recommendedBudget)}/mo</span></div>`;
+                } else if (diff > 0) {
+                    budgetLine = `<div class="rec-callout-row"><span class="rec-callout rec-callout-good">✓ Optimization lands ${formatCurrency(diff)}/mo under budget</span></div>`;
+                } else if (diff < 0) {
+                    budgetLine = `<div class="rec-callout-row"><span class="rec-callout rec-callout-bad">⚠ Still ${formatCurrency(Math.abs(diff))}/mo over budget after all optimizations</span></div>`;
+                } else {
+                    budgetLine = `<div class="rec-callout-row"><span class="rec-callout rec-callout-good">✓ Meets budget exactly</span></div>`;
+                }
             }
             summaryEl.innerHTML = `
                 <div class="rec-callout-row">
                     <span class="rec-callout rec-callout-savings">🔥 ${savingsPct}% of current spend is recoverable — ${formatCurrency(savingsTotal)}/mo</span>
                 </div>
-                <div class="rec-callout-row">${budgetLine}</div>
+                ${budgetLine}
             `;
             barEl.classList.remove('hidden');
         } else {
