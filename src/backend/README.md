@@ -90,6 +90,23 @@ You can simply view them in a web browser for convenience as well:
 
 ---
 
+### /api/v1/budgets
+- **GET**
+  - Query params: `limit`, `page`
+
+### /api/v1/budgets/{budgetId}
+- **GET**
+- **PATCH**
+  - Expects JSON object in the form (each field is optional):
+  ```
+  {
+    "alert_enabled": false,
+    "alert_threshold": "0.00",
+    "budget_amount": "0.00",
+    "monthly_limit": "1100.00"
+  }
+  ```
+
 ### /api/v1/clients
 - **GET**
   - Query params: `limit`, `page`
@@ -97,22 +114,33 @@ You can simply view them in a web browser for convenience as well:
 ### /api/v1/clients/{clientId}
 - **GET**
 
-### TODO: /api/v1/clients/{clientId}/budget
+### /api/v1/clients/{clientId}/budgets
 - **GET**
   - Query params: `limit`, `page`
 
-### TODO: /api/v1/clients/{clientId}/invoices
+### /api/v1/clients/{clientId}/budgets/{budgetId}
+- **GET**
+  - Query params: `limit`, `page`
+
+### /api/v1/clients/{clientId}/invoices
 - **GET**
   - Query params: `limit`, `page`, `start_date`, `end_date`
 
-### TODO: /api/v1/clients/{clientId}/invoices/{invoiceId}
+### /api/v1/clients/{clientId}/invoices/{invoiceId}
 - **GET**
 
-### TODO: /api/v1/clients/{clientId}/usage
+### /api/v1/clients/{clientId}/usages
 - **GET**
   - Query params: `limit`, `page`, `start_date`, `end_date`
 
-### TODO: /api/v1/clients/{clientId}/usage/{usageId}
+### /api/v1/clients/{clientId}/usages/{usageId}
+- **GET**
+
+### /api/v1/invoices
+- **GET**
+  - Query params: `limit`, `page`, `start_date`, `end_date`
+
+### /api/v1/invoices/{invoiceId}
 - **GET**
 
 ### /api/v1/providers
@@ -122,11 +150,11 @@ You can simply view them in a web browser for convenience as well:
 ### /api/v1/providers/{providerId}
 - **GET**
 
-### TODO: /api/v1/providers/{providerId}/services
+### /api/v1/providers/{providerId}/services
 - **GET**
   - Query params: `limit`, `page`
 
-### TODO: /api/v1/providers/{providerId}/services/{serviceId}
+### /api/v1/providers/{providerId}/services/{serviceId}
 - **GET**
 
 ### /api/v1/services
@@ -136,9 +164,16 @@ You can simply view them in a web browser for convenience as well:
 ### /api/v1/services/{serviceId}
 - **GET**
 
-### TODO: /api/v1/services/{serviceId}/usage
+### /api/v1/services/{serviceId}/usages
 - **GET**
   - Query params: `limit`, `page`, `start_date`, `end_date`
 
-### TODO: /api/v1/services/{serviceId}/usage/{usageId}
+### /api/v1/services/{serviceId}/usages/{usageId}
+- **GET**
+
+### /api/v1/usages
+- **GET**
+  - Query params: `limit`, `page`, `start_date`, `end_date`
+
+### /api/v1/usages/{usageId}
 - **GET**

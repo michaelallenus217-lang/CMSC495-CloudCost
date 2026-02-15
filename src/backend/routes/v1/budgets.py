@@ -9,11 +9,11 @@ Description: Budgets API endpoint. Returns budget records for cost tracking
 
 from flask import request
 from sqlalchemy import text
-from typing import cast
+from typing import cast, Any
 from backend.db.session import get_db_session
 from backend.routes.v1 import api_v1_bp
-from backend.api_http.schemas import PagedSchema
-from backend.api_http.responses import ok_resource, ok_resource_list, error_resource_missing
+from backend.api_http.schemas import PagedSchema, BudgetPatchSchema
+from backend.api_http.responses import ok_resource, ok_resource_list, error_resource_missing, error_bad_request
 
 @api_v1_bp.get("/budgets")
 def get_budgets():
@@ -66,7 +66,71 @@ def get_budget(budget_id: int):
             FROM Budgets
             WHERE BudgetID = :budget_id
         """),
-        {"budget_id": budget_id},
+        {
+            "budget_id": budget_id
+        },
+    ).fetchone()
+
+    if row is None:
+        return error_resource_missing("budget", budget_id)
+
+    item = {
+        "budget_id": row.BudgetID,
+        "client_id": row.ClientID,
+        "budget_amount": row.BudgetAmount,
+        "monthly_limit": row.MonthlyLimit,
+        "alert_threshold": row.AlertThreshold,
+        "alert_enabled": row.AlertEnabled,
+        "created_date": row.CreatedDate.isoformat() if row.CreatedDate else None,
+    }
+    return ok_resource(item, "budget")
+
+
+@api_v1_bp.patch("/budgets/<int:budget_id>")
+def patch_budget(budget_id: int):
+    payload = request.get_json(silent=True)
+    if payload is None or not isinstance(payload, dict):
+        return error_bad_request("Invalid JSON body (expected an object).")
+
+    patch = cast(dict[str, Any], BudgetPatchSchema().load(payload, partial=True))
+
+    db = get_db_session()
+
+    # Ensure resource exists
+    exists = db.execute(
+        text("SELECT 1 FROM Budgets WHERE BudgetID = :budget_id"),
+        { "budget_id": budget_id },
+    ).fetchone()
+    if exists is None:
+        return error_resource_missing("budget", budget_id)
+
+    # Attempt to update budget if new data was provided
+    if patch:
+        field_to_column = {
+            "alert_enabled": "AlertEnabled",
+            "alert_threshold": "AlertThreshold",
+            "budget_amount": "BudgetAmount",
+            "monthly_limit": "MonthlyLimit",
+        }
+
+        set_sql = ", ".join(f"{field_to_column[k]} = :{k}" for k in patch.keys())
+
+        db.execute(
+            text(f"UPDATE Budgets SET {set_sql} WHERE BudgetID = :budget_id"),
+            { "budget_id": budget_id, **patch },
+        )
+        db.commit()
+
+    # Get current budget and return
+    row = db.execute(
+        text("""
+            SELECT BudgetID, ClientID, BudgetAmount, MonthlyLimit, AlertThreshold, AlertEnabled, CreatedDate
+            FROM Budgets
+            WHERE BudgetID = :budget_id
+        """),
+        {
+            "budget_id": budget_id
+        },
     ).fetchone()
 
     if row is None:
