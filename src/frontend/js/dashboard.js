@@ -781,15 +781,24 @@ async function loadWasteAlerts() {
         // Update summary banner
         document.getElementById('waste-monthly-spend').textContent = formatCurrency(summary.totalMonthlyCost || 0);
         document.getElementById('waste-total-savings').textContent = formatCurrency(summary.totalSavings || 0) + '/mo';
-        document.getElementById('waste-budget-target').textContent = formatCurrency(summary.budgetAmount || 0);
-        const overBudgetEl = document.getElementById('waste-over-budget');
-        if (summary.overBudget) {
-            overBudgetEl.textContent = '+' + formatCurrency(summary.overBudgetAmount);
-            overBudgetEl.classList.add('waste-banner-danger');
-        } else {
-            overBudgetEl.textContent = 'On Track';
-            overBudgetEl.classList.remove('waste-banner-danger');
-            overBudgetEl.style.color = '#10b981';
+
+        // Hide budget cards when viewing all clients (budget is per-client)
+        const hasClient = !!filters.clientId;
+        document.querySelectorAll('.waste-budget-only').forEach(el => {
+            el.style.display = hasClient ? '' : 'none';
+        });
+
+        if (hasClient) {
+            document.getElementById('waste-budget-target').textContent = formatCurrency(summary.budgetAmount || 0);
+            const overBudgetEl = document.getElementById('waste-over-budget');
+            if (summary.overBudget) {
+                overBudgetEl.textContent = '+' + formatCurrency(summary.overBudgetAmount);
+                overBudgetEl.classList.add('waste-banner-danger');
+            } else {
+                overBudgetEl.textContent = 'On Track';
+                overBudgetEl.classList.remove('waste-banner-danger');
+                overBudgetEl.style.color = '#10b981';
+            }
         }
 
         // Severity counts
@@ -965,17 +974,25 @@ async function loadRecommendations() {
 
         // Savings banner
         const currentSpend = phases[1]?.spendBefore || 0;
-        // Use the last phase's spendAfter (accounts for skipped phases)
         const optimizedSpend = phases[3]?.spendAfter ?? phases[2]?.spendAfter ?? phases[1]?.spendAfter ?? currentSpend;
         const budgetAmount = phases[1]?.budgetAmount || 0;
+        const hasClient = !!filters.clientId;
+
         document.getElementById('rec-current-spend').textContent = formatCurrency(currentSpend) + '/mo';
-        document.getElementById('rec-budget').textContent = budgetAmount > 0 ? formatCurrency(budgetAmount) + '/mo' : 'Not set';
         document.getElementById('rec-target-spend').textContent = formatCurrency(optimizedSpend) + '/mo';
         document.getElementById('rec-total-savings').textContent = formatCurrency(totals.savings || 0) + '/mo';
 
-        // Budget vs Optimization bar
+        // Hide budget elements when viewing all clients (budget is per-client)
+        document.querySelectorAll('.rec-budget-only').forEach(el => {
+            el.style.display = hasClient ? '' : 'none';
+        });
+        if (hasClient) {
+            document.getElementById('rec-budget').textContent = budgetAmount > 0 ? formatCurrency(budgetAmount) + '/mo' : 'Not set';
+        }
+
+        // Budget vs Optimization bar (only when a specific client is selected)
         const barEl = document.getElementById('rec-budget-bar');
-        if (budgetAmount > 0) {
+        if (hasClient && budgetAmount > 0) {
             const savingsTotal = totals.savings || 0;
             const savingsPct = ((savingsTotal / currentSpend) * 100).toFixed(0);
             const maxVal = currentSpend * 1.15; // 15% padding so current marker isn't on the edge
