@@ -9,6 +9,9 @@
  *
  * FR-04: Cost anomaly detection / waste alerts
  * FR-05: Optimization recommendations with plus/minus analysis
+ *
+ * Dependencies (loaded via <script> tags before this file):
+ *   utils.js - formatCurrency() used in buildRec() for template token replacement
  */
 
 // ═══════════════════════════════════════════════════════════════════════════

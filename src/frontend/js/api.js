@@ -95,6 +95,14 @@ const MOCK_DATA = {
         { budget_id: 4, client_id: 4, budget_amount: 2000.00, monthly_limit: 2500.00, alert_threshold: 90, alert_enabled: false, created_date: '2026-01-01T00:00:00' },
         { budget_id: 5, client_id: 5, budget_amount: 7500.00, monthly_limit: 9000.00, alert_threshold: 80, alert_enabled: true, created_date: '2026-01-01T00:00:00' },
     ],
+
+    invoices: [
+        { invoice_id: 1001, client_id: 1, invoice_date: '2025-12-31', invoice_amount: 4850.00, created_date: '2025-12-31T00:00:00' },
+        { invoice_id: 1002, client_id: 2, invoice_date: '2025-12-31', invoice_amount: 2750.00, created_date: '2025-12-31T00:00:00' },
+        { invoice_id: 1003, client_id: 3, invoice_date: '2025-12-31', invoice_amount: 9200.00, created_date: '2025-12-31T00:00:00' },
+        { invoice_id: 1004, client_id: 4, invoice_date: '2025-12-31', invoice_amount: 1800.00, created_date: '2025-12-31T00:00:00' },
+        { invoice_id: 1005, client_id: 5, invoice_date: '2025-12-31', invoice_amount: 7100.00, created_date: '2025-12-31T00:00:00' },
+    ],
 };
 
 /**
@@ -346,7 +354,17 @@ async function checkHealth() {
     }
 }
 
-// Get aggregated cost data for dashboard
+/**
+ * Fetch and aggregate cost data for all dashboard views.
+ * Called by loadDashboard(), getWasteAlerts(), getRecommendations(), and exportData().
+ *
+ * NOTE: Return values totalCost/awsCost/azureCost/gcpCost/trendData are provided
+ * for convenience but dashboard.js recalculates these from usages via
+ * calculateDashboardMetrics() to support client-side filtering.
+ *
+ * @param {number} days - lookback window (default 30; recommendations use 365)
+ * @returns {Object} { totalCost, awsCost, azureCost, gcpCost, trendData[], usages[], services[], providers[] }
+ */
 async function getDashboardData(days = 30) {
     try {
         const [usages, providers, services] = await Promise.all([
@@ -382,12 +400,12 @@ async function getDashboardData(days = 30) {
             }
         });
         
-        // Group by date for trend chart
+        // Group by date for trend chart (all three providers)
         const costsByDate = {};
         recentUsages.forEach(usage => {
             const date = usage.usage_date;
             if (!costsByDate[date]) {
-                costsByDate[date] = { date, total: 0, aws: 0, azure: 0 };
+                costsByDate[date] = { date, total: 0, aws: 0, azure: 0, gcp: 0 };
             }
             
             const service = services.find(s => s.service_id === usage.service_id);
@@ -397,6 +415,8 @@ async function getDashboardData(days = 30) {
                     costsByDate[date].aws += usage.total_cost;
                 } else if (service.provider_id === PROVIDER_IDS.AZURE) {
                     costsByDate[date].azure += usage.total_cost;
+                } else if (service.provider_id === PROVIDER_IDS.GCP) {
+                    costsByDate[date].gcp += usage.total_cost;
                 }
             }
         });
@@ -409,6 +429,7 @@ async function getDashboardData(days = 30) {
             totalCost,
             awsCost: costsByProvider[PROVIDER_IDS.AWS] || 0,
             azureCost: costsByProvider[PROVIDER_IDS.AZURE] || 0,
+            gcpCost: costsByProvider[PROVIDER_IDS.GCP] || 0,
             trendData,
             usages: recentUsages,
             services,
@@ -427,6 +448,19 @@ async function getDashboardData(days = 30) {
  *
  * @param {Object} filters - { clientId, providerId, serviceId }
  * @returns {Object} { alerts[], summary{} } from computeWasteAlerts
+ */
+// ═══════════════════════════════════════════════════════════════════════════
+// ANALYSIS ENGINE WRAPPERS
+// Bridges API data fetching with the analysis engine in analysis.js.
+// Filters are applied here before passing to compute functions.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Fetch data and compute waste alerts using the analysis engine.
+ * Applies client/provider/service filters before analysis.
+ *
+ * @param {Object} filters - { clientId, providerId, serviceId } from navbar/drawer
+ * @returns {Object} { alerts[], summary{} } from computeWasteAlerts()
  */
 async function getWasteAlerts(filters = {}) {
     try {
@@ -469,14 +503,18 @@ async function getWasteAlerts(filters = {}) {
  * Get optimization recommendations using the analysis engine.
  * Builds on waste alerts, then runs computeRecommendations().
  *
+ * KEY DESIGN DECISIONS:
+ * - Uses 365-day data window (not dashboard's 30-day) for accurate baselines
+ * - Only filters by client — provider/service filters are intentionally
+ *   ignored because recommendations must evaluate ALL services to find
+ *   cross-provider optimization opportunities
+ * - Phase 3 (multi-cloud) is auto-skipped when Phases 1+2 meet budget
+ *
  * @param {Object} filters - { clientId, providerId, serviceId }
  * @returns {Object} { phases, totals } from computeRecommendations
  */
 async function getRecommendations(filters = {}) {
     try {
-        // Recommendations use ALL available data (not just 30 days)
-        // and ignore provider/service filters — we need the full picture
-        // to calculate accurate optimization potential
         const [dashData, budgets] = await Promise.all([
             getDashboardData(365),
             getBudgets(),
@@ -484,7 +522,8 @@ async function getRecommendations(filters = {}) {
 
         const { usages, services, providers } = dashData;
 
-        // Only filter by client — recommendations must span all providers/services
+        // Only filter by client — provider/service filters deliberately excluded
+        // so recommendations can identify cross-provider savings opportunities
         let filteredUsages = usages;
         if (filters.clientId) {
             filteredUsages = filteredUsages.filter(u => u.client_id === parseInt(filters.clientId));
@@ -505,13 +544,21 @@ async function getRecommendations(filters = {}) {
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// BUDGET OPERATIONS (PATCH)
+// Uses Sean's backend PATCH endpoint in routes/v1/budgets.py
+// ═══════════════════════════════════════════════════════════════════════════
+
 /**
  * Save budget settings via PATCH /api/v1/budgets/:budgetId
- * Uses Sean's PATCH endpoint (commit 11af8bf).
  *
- * @param {number} budgetId - budget record ID
- * @param {Object} patchData - fields to update (budget_amount, monthly_limit, alert_threshold, alert_enabled)
- * @returns {Object} API response
+ * @param {number} budgetId - budget record ID (from GET /budgets)
+ * @param {Object} patchData - fields to update:
+ *   - budget_amount {string}  - monthly budget target (e.g. "5000.00")
+ *   - monthly_limit {string}  - hard spending cap
+ *   - alert_threshold {string} - dollar amount that triggers alert
+ *   - alert_enabled {boolean}  - whether alerts are active
+ * @returns {Object} API response with updated budget record
  */
 async function patchBudget(budgetId, patchData) {
     if (API_CONFIG.USE_MOCK_DATA) {

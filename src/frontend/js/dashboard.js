@@ -3,11 +3,27 @@
  * Project: Cloud Cost Intelligence Platform
  * Author: Ishan (Frontend Lead)
  * Created: January 2026
- * Description: Main dashboard logic. Initializes charts, handles user
- *              interactions, and renders cost data visualizations.
+ * Updated: February 2026 - Added waste alerts, recommendations, budget bar,
+ *          invoice PDF, CSV analyst workbook, and filter cascading.
+ * Description: Main dashboard controller. Initializes Chart.js visualizations,
+ *              handles navigation, user interactions, filter state, and export.
+ *
+ * Dependencies (loaded via <script> tags before this file):
+ *   config.js  - API_CONFIG, ENDPOINTS, PROVIDER_IDS, CHART_COLORS
+ *   utils.js   - formatCurrency, formatDate, formatPercentage, groupBy, exportToCSV, showError
+ *   api.js     - getDashboardData, getWasteAlerts, getRecommendations, getBudgets, patchBudget
+ *   analysis.js - computeWasteAlerts, computeRecommendations, getBudgetForClient
+ *
+ * FR Coverage:
+ *   FR-01: Dashboard cost summary cards
+ *   FR-02: Trend chart visualization (renderTrendChart)
+ *   FR-03: Provider/service/client filtering (applyFilters)
+ *   FR-04: Waste alerts page (loadWasteAlerts)
+ *   FR-05: Optimization recommendations (loadRecommendations)
+ *   FR-06: CSV/PDF export (exportData)
+ *   FR-07: Budget settings (loadSettings, handleSaveBudgetSettings)
+ *   FR-08: Resource metrics cards (calculateDashboardMetrics)
  */
-
-// Main Dashboard Logic & Chart.js Integration (uses global functions from other files)
 
 // Global state
 let currentPage = 'dashboard';
@@ -185,7 +201,12 @@ function setupEventListeners() {
     document.getElementById('export-pdf')?.addEventListener('click', () => exportData('pdf'));
 }
 
-// Load Dashboard
+/**
+ * Load dashboard data from API, cache for filtering, and render UI.
+ * Entry point for the main dashboard view (FR-01, FR-02, FR-08).
+ *
+ * @param {boolean} skipRender - if true, skip initial render (filters will re-render immediately after)
+ */
 async function loadDashboard(skipRender = false) {
     try {
         hideError();
@@ -231,19 +252,24 @@ async function loadDashboard(skipRender = false) {
     }
 }
 
-// Populate filter dropdowns
+/**
+ * Populate service, provider, and client filter dropdowns (FR-03).
+ * Called on dashboard load and when settings page opens.
+ * Preserves current selection when repopulating.
+ *
+ * @param {Array|null} services - service records (fetched if null)
+ * @param {Array|null} providers - provider records (fetched if null)
+ */
 async function populateFilters(services = null, providers = null) {
     try {
-        // Get data if not provided
+        // Get service/provider data if not passed from loadDashboard()
         if (!services || !providers) {
-            const [servicesResponse, providersResponse, clientsResponse] = await Promise.all([
+            const [servicesResponse, providersResponse] = await Promise.all([
                 getServices(),
                 getProviders(),
-                getClients(),
             ]);
             services = servicesResponse.services || [];
             providers = providersResponse.providers || [];
-            const clients = clientsResponse || [];
         }
         
         // Populate service filter
@@ -291,7 +317,11 @@ async function populateFilters(services = null, providers = null) {
     }
 }
 
-// Apply filters - FULL IMPLEMENTATION
+/**
+ * Apply active client/provider/service filters to cached dashboard data (FR-03).
+ * Filters usages client-side from unfilteredDashboardData, recalculates metrics,
+ * and cascades to waste alerts / recommendations if those pages are active.
+ */
 async function applyFilters() {
     try {
         hideError();
@@ -381,7 +411,16 @@ async function applyFilters() {
     }
 }
 
-// Calculate dashboard metrics from filtered usages
+/**
+ * Calculate all dashboard metrics from a (possibly filtered) set of usage records.
+ * Returns cost totals, per-provider breakdowns, trend data, and resource metrics.
+ * This is the single source of truth for what the dashboard displays (FR-01, FR-08).
+ *
+ * @param {Array} usages - usage records (may be filtered by client/provider/service)
+ * @param {Array} services - all service records
+ * @param {Array} providers - all provider records
+ * @returns {Object} metrics for updateDashboardUI()
+ */
 function calculateDashboardMetrics(usages, services, providers) {
     // Calculate total cost
     const totalCost = usages.reduce((sum, u) => sum + u.total_cost, 0);
@@ -451,7 +490,12 @@ function calculateDashboardMetrics(usages, services, providers) {
     };
 }
 
-// Update UI without re-fetching data
+/**
+ * Render dashboard UI from pre-calculated metrics. Does NOT fetch data.
+ * Updates cost cards, resource metric cards, and re-renders the trend chart.
+ *
+ * @param {Object} data - output from calculateDashboardMetrics()
+ */
 function updateDashboardUI(data) {
     // Update cost summary cards
     document.getElementById('total-cost').textContent = formatCurrency(data.totalCost);
@@ -475,7 +519,7 @@ function updateDashboardUI(data) {
     renderTrendChart(data.trendData);
 }
 
-// Update service filter options based on selected provider (cascading filter)
+/** Cascade provider filter: rebuild service dropdown to show only selected provider's services. */
 function updateServiceFilterOptions(providerId) {
     const serviceFilter = document.getElementById('service-filter');
     if (!serviceFilter || !unfilteredDashboardData) return;
@@ -508,6 +552,7 @@ function updateServiceFilterOptions(providerId) {
     }
 }
 
+/** Reset all filter dropdowns to 'All' and re-render dashboard with unfiltered data. */
 function clearFilters() {
     // Reset filter dropdowns to default
     document.getElementById('provider-filter').value = '';
@@ -532,7 +577,7 @@ function clearFilters() {
     }
 }
 
-// Update the active filter count badge in the navbar
+/** Update the filter count badge in the navbar (e.g. "2" when client + provider selected). */
 function updateActiveFilterCount() {
     const badge = document.getElementById('active-filter-count');
     if (!badge) return;
@@ -551,7 +596,13 @@ function updateActiveFilterCount() {
     }
 }
 
-// Render Trend Chart using Chart.js
+/**
+ * Render the cost trend line chart using Chart.js (FR-02).
+ * Smart dataset selection: hides "Total" line when only one provider has data,
+ * hides provider lines that are all-zero (e.g., GCP when filtered to AWS-only client).
+ *
+ * @param {Array} trendData - array of { date, total, aws, azure, gcp } objects
+ */
 function renderTrendChart(trendData) {
     const canvas = document.getElementById('trend-chart');
     if (!canvas) return;
@@ -781,6 +832,7 @@ async function loadWasteAlerts() {
     }
 }
 
+/** Render waste alerts table rows with severity badges, trend arrows, and alt-provider flags. */
 function renderWasteAlertsTable(alerts) {
     const alertsBody = document.getElementById('waste-alerts-body');
     alertsBody.innerHTML = '';
@@ -818,6 +870,7 @@ function renderWasteAlertsTable(alerts) {
     });
 }
 
+/** Render horizontal bar chart showing spend by service category (e.g. Compute, Storage). */
 function renderCategoryBreakdown(categorySpend, totalSpend) {
     const container = document.getElementById('waste-category-bars');
     if (!container) return;
@@ -839,7 +892,7 @@ function renderCategoryBreakdown(categorySpend, totalSpend) {
     });
 }
 
-// Sorting (retained from original)
+/** Wire sortable column headers on waste alerts table. Clones nodes to clear stale listeners. */
 function setupWasteAlertsSorting() {
     const sortableHeaders = document.querySelectorAll('.alerts-table .sortable');
     sortableHeaders.forEach(header => {
@@ -862,6 +915,7 @@ function setupWasteAlertsSorting() {
     updateSortIndicators();
 }
 
+/** Sort alerts by column and direction. Returns new array (no mutation). */
 function sortWasteAlerts(alerts, column, direction) {
     return [...alerts].sort((a, b) => {
         let valA, valB;
@@ -877,6 +931,7 @@ function sortWasteAlerts(alerts, column, direction) {
     });
 }
 
+/** Update sort arrow CSS classes on waste alerts table headers. */
 function updateSortIndicators() {
     document.querySelectorAll('.alerts-table .sortable').forEach(h => h.classList.remove('sorted', 'asc', 'desc'));
     const cur = document.querySelector(`.alerts-table .sortable[data-sort="${currentSortColumn}"]`);
@@ -1118,7 +1173,7 @@ async function loadRecommendations() {
     }
 }
 
-// Toggle phase detail accordion
+/** Toggle phase detail accordion open/closed. Called via onclick in rendered HTML. */
 function togglePhaseDetail(headerEl) {
     const body = headerEl.nextElementSibling;
     const toggle = headerEl.querySelector('.phase-detail-toggle');
@@ -1126,7 +1181,7 @@ function togglePhaseDetail(headerEl) {
     toggle.classList.toggle('open');
 }
 
-// Toggle individual recommendation item
+/** Toggle individual recommendation plus/minus detail. Called via onclick in rendered HTML. */
 function toggleRecItem(headerEl) {
     const detail = headerEl.nextElementSibling;
     const toggle = headerEl.querySelector('.rec-item-toggle');
@@ -1138,9 +1193,14 @@ function toggleRecItem(headerEl) {
 // SETTINGS PAGE — Budget settings with PATCH integration
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Current budget ID for PATCH operations
+/** Budget record ID for selected client. Set by loadSettings(), consumed by handleSaveBudgetSettings(). */
 let currentBudgetId = null;
 
+/**
+ * Load budget settings for the selected client (FR-07).
+ * Reads from GET /budgets, finds the matching client record,
+ * and populates the form fields.
+ */
 async function loadSettings() {
     try {
         hideError();
@@ -1175,6 +1235,11 @@ async function loadSettings() {
     }
 }
 
+/**
+ * Save budget settings via PATCH /budgets/:id (FR-07).
+ * Converts the threshold slider (percentage) to a dollar amount before sending.
+ * Uses Sean's PATCH endpoint from budgets.py.
+ */
 async function handleSaveBudgetSettings() {
     try {
         const clientId = document.getElementById('client-filter').value;
@@ -1230,7 +1295,25 @@ async function handleSaveBudgetSettings() {
     }
 }
 
-// Export Data
+/**
+ * Export dashboard data as CSV or PDF invoice (FR-06).
+ *
+ * CSV ("The Analyst's Workbook") — 20-column flat file with:
+ *   - Cross-provider rate comparison per service type
+ *   - 7-day rolling averages and 30-day trend percentages
+ *   - Switch-savings calculation (cheapest provider delta)
+ *   - Utilization estimates and waste status flags
+ *   Respects all active filters (client/provider/service).
+ *
+ * PDF (Invoice) — Finance-persona document with:
+ *   - December 2025 billing period vs November 2025 comparison
+ *   - Month-over-month delta (color-coded red/green)
+ *   - Budget comparison in totals section (over/under)
+ *   - Provider breakdown table
+ *   Uses jsPDF + jspdf-autotable for generation.
+ *
+ * @param {string} format - 'csv' or 'pdf'
+ */
 async function exportData(format) {
     try {
         hideError();
@@ -1273,7 +1356,7 @@ async function exportData(format) {
         progressText.textContent = 'Generating file...';
         
         if (format === 'csv') {
-            // === OPTION B: "The Analyst's Workbook" — 20-column flat CSV ===
+            // ─── CSV EXPORT: "The Analyst's Workbook" ─── 20-column flat file ───
             progressText.textContent = 'Loading reference data...';
             const clientsResponse = await getClients();
             const clients = clientsResponse || [];
@@ -1447,7 +1530,7 @@ async function exportData(format) {
             }, 2000);
 
         } else if (format === 'pdf') {
-            // Invoice-Style PDF Export (Finance Persona)
+            // ─── PDF EXPORT: Invoice-Style (Finance Persona) ───
             progressFill.style.width = '50%';
             progressText.textContent = 'Loading invoice data...';
             
@@ -1485,10 +1568,13 @@ async function exportData(format) {
                 const midGray = [100, 100, 100];
                 const lightGray = [200, 200, 200];
 
-                // Fetch ALL usages (not filtered by dashboard date range)
+                // Fetch full year of usages for invoice line items (not dashboard's 30-day window)
                 const allData = await getDashboardData(365);
 
-                // Build line items for a specific month
+                /**
+                 * Build invoice line items: aggregate usages by service for a given month.
+                 * Returns sorted array (highest cost first) with provider, units, rate, amount.
+                 */
                 const buildLineItems = (clientId, yearMonth) => {
                     const clientUsages = allData.usages.filter(u =>
                         u.client_id === clientId && u.usage_date.startsWith(yearMonth)
@@ -1515,7 +1601,8 @@ async function exportData(format) {
                     return Object.values(byService).sort((a, b) => b.totalCost - a.totalCost);
                 };
 
-                // Invoice = December 2025, Compare = November 2025
+                // Billing period: December 2025 (current) vs November 2025 (prior)
+                // Hardcoded to match seed data date range
                 const invoiceMonth = '2025-12';
                 const compareMonth = '2025-11';
                 const invoiceMonthLabel = 'December 2025';
@@ -1525,6 +1612,7 @@ async function exportData(format) {
                 const clientIds = [...new Set(filteredInvoices.map(inv => inv.client_id))];
                 let isFirstPage = true;
 
+                // Generate one invoice page per client
                 clientIds.forEach(clientId => {
                     const clientInvoices = filteredInvoices
                         .filter(inv => inv.client_id === clientId)
@@ -1538,7 +1626,7 @@ async function exportData(format) {
                     if (!isFirstPage) doc.addPage();
                     isFirstPage = false;
 
-                    // Header band
+                    // ── PDF Header Band (blue stripe with logo text) ──
                     doc.setFillColor(...brandColor);
                     doc.rect(0, 0, pageWidth, 40, 'F');
 
@@ -1550,13 +1638,13 @@ async function exportData(format) {
                     doc.text('Cloud Cost Intelligence Platform', 14, 26);
                     doc.text('The Code Collective', 14, 32);
 
-                    // Invoice meta (right side)
+                    // ── Invoice metadata (right-aligned in header) ──
                     doc.setFontSize(9);
                     doc.text('Invoice #: ' + latestInvoice.invoice_id, pageWidth - 14, 18, { align: 'right' });
                     doc.text('Date: ' + latestInvoice.invoice_date, pageWidth - 14, 24, { align: 'right' });
                     doc.text('Generated: ' + new Date().toLocaleDateString(), pageWidth - 14, 30, { align: 'right' });
 
-                    // Bill To
+                    // ── Bill To / Billing Period ──
                     let y = 50;
                     doc.setFontSize(9);
                     doc.setTextColor(...midGray);
@@ -1573,7 +1661,7 @@ async function exportData(format) {
                     doc.setTextColor(...darkGray);
                     doc.text(invoiceMonthLabel, pageWidth - 14, y + 7, { align: 'right' });
 
-                    // Invoice Amount Box — uses actual December usage total
+                    // ── Amount Due Box with MoM comparison ──
                     y = 70;
                     const usageTotal = lineItems.reduce((sum, item) => sum + item.totalCost, 0);
                     const momDelta = priorTotal > 0 ? usageTotal - priorTotal : 0;
@@ -1597,7 +1685,7 @@ async function exportData(format) {
                     doc.setTextColor(...midGray);
                     doc.text(compareMonthLabel + ': ' + formatCurrency(priorTotal), 20, y + 18);
 
-                    // Line Items Table
+                    // ── Line Items Table (one row per service) ──
                     y = 96;
                     const lineItemRows = lineItems.map(item => [
                         item.provider,
@@ -1631,7 +1719,7 @@ async function exportData(format) {
                         margin: { left: 14, right: 14 },
                     });
 
-                    // Totals Section — MoM comparison + budget
+                    // ── Totals Section: MoM delta + budget comparison ──
                     let finalY = doc.lastAutoTable.finalY + 5;
                     const clientBudget = getBudgetForClient(budgets, clientId);
                     const budgetAmt = clientBudget ? parseFloat(clientBudget.budget_amount) : 0;
@@ -1663,7 +1751,7 @@ async function exportData(format) {
                         margin: { left: pageWidth - 100 },
                     });
 
-                    // Provider Breakdown
+                    // ── Provider Breakdown (mini table if space permits) ──
                     finalY = doc.lastAutoTable.finalY + 10;
                     if (finalY < 240) {
                         doc.setFontSize(11);
@@ -1700,7 +1788,7 @@ async function exportData(format) {
                     }
                 });
 
-                // Footer on all pages
+                // ── Footer on all pages ──
                 const pageCount = doc.internal.getNumberOfPages();
                 for (let i = 1; i <= pageCount; i++) {
                     doc.setPage(i);
