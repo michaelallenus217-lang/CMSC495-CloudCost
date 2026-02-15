@@ -315,10 +315,11 @@ async function applyFilters() {
             } else {
                 await loadDashboard();
             }
-            // Reload waste/recommendations if active
+            // Reload active page
             const activePage = document.querySelector('.nav-link.active')?.dataset.page;
             if (activePage === 'waste') await loadWasteAlerts();
             if (activePage === 'recommendations') await loadRecommendations();
+            if (activePage === 'settings') await loadSettings();
             return;
         }
         
@@ -372,6 +373,7 @@ async function applyFilters() {
         const activePage = document.querySelector('.nav-link.active')?.dataset.page;
         if (activePage === 'waste') await loadWasteAlerts();
         if (activePage === 'recommendations') await loadRecommendations();
+        if (activePage === 'settings') await loadSettings();
         
     } catch (error) {
         console.error('Error applying filters:', error);
@@ -707,258 +709,524 @@ function renderTrendChart(trendData) {
     });
 }
 
-// Load Waste Alerts with sorting
+// ═══════════════════════════════════════════════════════════════════════════
+// WASTE ALERTS PAGE — Full rendering with analysis engine
+// ═══════════════════════════════════════════════════════════════════════════
+
 async function loadWasteAlerts() {
     try {
         hideError();
         const alertsBody = document.getElementById('waste-alerts-body');
-        alertsBody.innerHTML = '<tr><td colspan="7" class="loading">Loading waste alerts...</td></tr>';
-        
-        // Read global filters
+        alertsBody.innerHTML = '<tr><td colspan="8" class="loading">Analyzing resource utilization...</td></tr>';
+
         const filters = {
             providerId: document.getElementById('provider-filter')?.value || '',
             serviceId: document.getElementById('service-filter')?.value || '',
             clientId: document.getElementById('client-filter')?.value || '',
         };
-        
-        const alerts = await getWasteAlerts(filters);
-        
-        if (alerts.length === 0) {
-            alertsBody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: #10b981;">No waste detected! Your resources are well-optimized.</td></tr>';
+
+        const { alerts, summary } = await getWasteAlerts(filters);
+
+        // Update summary banner
+        document.getElementById('waste-monthly-spend').textContent = formatCurrency(summary.totalMonthlyCost || 0);
+        document.getElementById('waste-total-savings').textContent = formatCurrency(summary.totalSavings || 0) + '/mo';
+        document.getElementById('waste-budget-target').textContent = formatCurrency(summary.budgetAmount || 0);
+        const overBudgetEl = document.getElementById('waste-over-budget');
+        if (summary.overBudget) {
+            overBudgetEl.textContent = '+' + formatCurrency(summary.overBudgetAmount);
+            overBudgetEl.classList.add('waste-banner-danger');
+        } else {
+            overBudgetEl.textContent = 'On Track';
+            overBudgetEl.classList.remove('waste-banner-danger');
+            overBudgetEl.style.color = '#10b981';
+        }
+
+        // Severity counts
+        document.getElementById('waste-critical-count').textContent = summary.criticalCount || 0;
+        document.getElementById('waste-warning-count').textContent = summary.warningCount || 0;
+        const infoCount = alerts.filter(a => a.severity === 'info').length;
+        document.getElementById('waste-info-count').textContent = infoCount;
+
+        // Provider concentration warning
+        const concEl = document.getElementById('waste-provider-concentration');
+        if (summary.topProviderPct > 80 && summary.providerCount === 1) {
+            document.getElementById('waste-concentration-text').textContent =
+                `100% of spend is with ${summary.topProvider}. No cross-provider alternatives available for diversification.`;
+            concEl.classList.remove('hidden');
+        } else if (summary.topProviderPct > 80) {
+            document.getElementById('waste-concentration-text').textContent =
+                `${summary.topProviderPct.toFixed(0)}% of spend is concentrated with ${summary.topProvider}. Consider multi-provider strategy.`;
+            concEl.classList.remove('hidden');
+        } else {
+            concEl.classList.add('hidden');
+        }
+
+        // Empty state
+        if (!alerts || alerts.length === 0) {
+            alertsBody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:2rem;color:#10b981;">No waste detected! Resources are well-optimized.</td></tr>';
             return;
         }
-        
-        // Store alerts data globally for sorting
+
+        // Store for sorting
         wasteAlertsData = alerts;
-        
-        // Setup sort handlers (only once)
         setupWasteAlertsSorting();
-        
-        // Render with default sort
-        renderWasteAlertsTable(wasteAlertsData);
-        
+        renderWasteAlertsTable(alerts);
+
+        // Category breakdown bars
+        renderCategoryBreakdown(summary.categorySpend || {}, summary.totalMonthlyCost || 1);
+
     } catch (error) {
         console.error('Error loading waste alerts:', error);
         showError('Failed to load waste alerts. Please try again.', loadWasteAlerts);
     }
 }
 
-// Setup sorting click handlers
-function setupWasteAlertsSorting() {
-    const sortableHeaders = document.querySelectorAll('.alerts-table .sortable');
-    
-    // Remove existing listeners to avoid duplicates
-    sortableHeaders.forEach(header => {
-        const newHeader = header.cloneNode(true);
-        header.parentNode.replaceChild(newHeader, header);
-    });
-    
-    // Add new listeners
-    document.querySelectorAll('.alerts-table .sortable').forEach(header => {
-        header.addEventListener('click', () => {
-            const sortColumn = header.dataset.sort;
-            
-            // Toggle direction if clicking same column
-            if (sortColumn === currentSortColumn) {
-                currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
-            } else {
-                // New column - default to descending for numbers, ascending for text
-                currentSortColumn = sortColumn;
-                currentSortDirection = ['service_name', 'provider_name'].includes(sortColumn) ? 'asc' : 'desc';
-            }
-            
-            // Sort and re-render
-            const sortedData = sortWasteAlerts(wasteAlertsData, currentSortColumn, currentSortDirection);
-            renderWasteAlertsTable(sortedData);
-            updateSortIndicators();
-        });
-    });
-    
-    // Set initial sort indicators
-    updateSortIndicators();
-}
-
-// Sort waste alerts by column
-function sortWasteAlerts(alerts, column, direction) {
-    const sorted = [...alerts].sort((a, b) => {
-        let valA, valB;
-        
-        switch (column) {
-            case 'service_name':
-            case 'provider_name':
-                valA = a[column].toLowerCase();
-                valB = b[column].toLowerCase();
-                return direction === 'asc' 
-                    ? valA.localeCompare(valB)
-                    : valB.localeCompare(valA);
-            
-            case 'utilization':
-            case 'daily_cost':
-            case 'potential_savings':
-                valA = a[column];
-                valB = b[column];
-                return direction === 'asc' 
-                    ? valA - valB
-                    : valB - valA;
-            
-            default:
-                return 0;
-        }
-    });
-    
-    return sorted;
-}
-
-// Update sort indicator arrows
-function updateSortIndicators() {
-    // Remove all sorted classes
-    document.querySelectorAll('.alerts-table .sortable').forEach(header => {
-        header.classList.remove('sorted', 'asc', 'desc');
-    });
-    
-    // Add sorted class to current column
-    const currentHeader = document.querySelector(`.alerts-table .sortable[data-sort="${currentSortColumn}"]`);
-    if (currentHeader) {
-        currentHeader.classList.add('sorted', currentSortDirection);
-    }
-}
-
-// Render waste alerts table
 function renderWasteAlertsTable(alerts) {
     const alertsBody = document.getElementById('waste-alerts-body');
     alertsBody.innerHTML = '';
-    
+
     alerts.forEach(alert => {
         const row = document.createElement('tr');
-        
-        const utilizationClass = alert.utilization < 0.2 ? 'utilization-low' : 'utilization-medium';
-        
+
+        // Trend arrow
+        let trendHtml;
+        if (alert.trend > 5) {
+            trendHtml = `<span class="trend-up">▲ ${alert.trend.toFixed(0)}%</span>`;
+        } else if (alert.trend < -5) {
+            trendHtml = `<span class="trend-down">▼ ${Math.abs(alert.trend).toFixed(0)}%</span>`;
+        } else {
+            trendHtml = `<span class="trend-flat">— flat</span>`;
+        }
+
+        // Alt provider
+        const altHtml = alert.has_alternative
+            ? `<span class="alt-badge">✓ Available</span>`
+            : `<span class="alt-badge locked">— Locked</span>`;
+
         row.innerHTML = `
-            <td>${alert.service_name}</td>
+            <td><span class="severity-badge ${alert.severity}"><span class="severity-dot-sm"></span>${alert.severity}</span></td>
+            <td>${alert.service_name}<br><span style="font-size:0.8rem;color:var(--text-secondary)">${alert.service_type}</span></td>
             <td>${alert.provider_name}</td>
-            <td>Multiple</td>
-            <td><span class="utilization-badge ${utilizationClass}">${formatPercentage(alert.utilization)}</span></td>
-            <td>${formatCurrency(alert.daily_cost)}</td>
-            <td style="color: var(--success-color); font-weight: 600;">${formatCurrency(alert.potential_savings)}/mo</td>
-            <td><button class="btn-action" onclick="viewWasteAlertDetails(${alert.service_id})">View Details</button></td>
+            <td><span class="utilization-badge ${alert.utilization < 0.2 ? 'utilization-low' : 'utilization-medium'}">${formatPercentage(alert.utilization)}</span></td>
+            <td>${formatCurrency(alert.monthly_cost)}</td>
+            <td style="color:#10b981;font-weight:600">${formatCurrency(alert.potential_savings)}/mo</td>
+            <td>${trendHtml}</td>
+            <td>${altHtml}</td>
         `;
-        
+
         alertsBody.appendChild(row);
     });
 }
 
-// Placeholder for details view (Phase II Priority 2 if needed)
-function viewWasteAlertDetails(serviceId) {
-    const alert = wasteAlertsData.find(a => a.service_id === serviceId);
-    if (alert) {
-        console.log('View details for:', alert);
-        showError(`Details view: ${alert.service_name} - ${formatPercentage(alert.utilization)} utilization, save ${formatCurrency(alert.potential_savings)}/month`);
-    }
+function renderCategoryBreakdown(categorySpend, totalSpend) {
+    const container = document.getElementById('waste-category-bars');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const sorted = Object.entries(categorySpend).sort((a, b) => b[1] - a[1]);
+    const maxCost = sorted.length > 0 ? sorted[0][1] : 1;
+
+    sorted.forEach(([category, cost]) => {
+        const pct = (cost / maxCost) * 100;
+        const row = document.createElement('div');
+        row.className = 'category-bar-row';
+        row.innerHTML = `
+            <span class="category-bar-label">${category}</span>
+            <div class="category-bar-track"><div class="category-bar-fill" style="width:${pct}%"></div></div>
+            <span class="category-bar-value">${formatCurrency(cost)}/mo</span>
+        `;
+        container.appendChild(row);
+    });
 }
 
-// Load Recommendations
+// Sorting (retained from original)
+function setupWasteAlertsSorting() {
+    const sortableHeaders = document.querySelectorAll('.alerts-table .sortable');
+    sortableHeaders.forEach(header => {
+        const newHeader = header.cloneNode(true);
+        header.parentNode.replaceChild(newHeader, header);
+    });
+    document.querySelectorAll('.alerts-table .sortable').forEach(header => {
+        header.addEventListener('click', () => {
+            const col = header.dataset.sort;
+            if (col === currentSortColumn) {
+                currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSortColumn = col;
+                currentSortDirection = ['service_name', 'provider_name'].includes(col) ? 'asc' : 'desc';
+            }
+            renderWasteAlertsTable(sortWasteAlerts(wasteAlertsData, currentSortColumn, currentSortDirection));
+            updateSortIndicators();
+        });
+    });
+    updateSortIndicators();
+}
+
+function sortWasteAlerts(alerts, column, direction) {
+    return [...alerts].sort((a, b) => {
+        let valA, valB;
+        switch (column) {
+            case 'service_name': case 'provider_name':
+                valA = a[column].toLowerCase(); valB = b[column].toLowerCase();
+                return direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            case 'utilization': case 'monthly_cost': case 'daily_cost': case 'potential_savings':
+                valA = a[column]; valB = b[column];
+                return direction === 'asc' ? valA - valB : valB - valA;
+            default: return 0;
+        }
+    });
+}
+
+function updateSortIndicators() {
+    document.querySelectorAll('.alerts-table .sortable').forEach(h => h.classList.remove('sorted', 'asc', 'desc'));
+    const cur = document.querySelector(`.alerts-table .sortable[data-sort="${currentSortColumn}"]`);
+    if (cur) cur.classList.add('sorted', currentSortDirection);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RECOMMENDATIONS PAGE — Savings Roadmap with Plus/Minus
+// ═══════════════════════════════════════════════════════════════════════════
+
 async function loadRecommendations() {
     try {
         hideError();
-        const container = document.getElementById('recommendations-container');
-        container.innerHTML = '<div class="loading">Loading recommendations...</div>';
-        
-        // Read global filters
+        const phaseCardsEl = document.getElementById('rec-phase-cards');
+        const detailEl = document.getElementById('rec-phases-detail');
+        phaseCardsEl.innerHTML = '<div class="loading">Generating savings roadmap...</div>';
+        detailEl.innerHTML = '';
+
         const filters = {
             providerId: document.getElementById('provider-filter')?.value || '',
             serviceId: document.getElementById('service-filter')?.value || '',
             clientId: document.getElementById('client-filter')?.value || '',
         };
-        
-        const recommendations = await getRecommendations(filters);
-        
-        if (recommendations.length === 0) {
-            container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No optimization recommendations at this time.</p>';
+
+        const { phases, totals } = await getRecommendations(filters);
+
+        if (!phases || Object.keys(phases).length === 0) {
+            phaseCardsEl.innerHTML = '<p style="text-align:center;color:var(--text-secondary);grid-column:1/-1">No optimization recommendations at this time.</p>';
             return;
         }
-        
-        container.innerHTML = '';
-        recommendations.forEach(rec => {
-            const card = document.createElement('div');
-            card.className = 'recommendation-card';
-            card.innerHTML = `
-                <h4>${rec.title}</h4>
-                <p>${rec.description}</p>
-                <div class="config-display">
-                    <strong>Current:</strong> ${rec.current_config}
+
+        // Savings banner
+        const currentSpend = phases[1]?.spendBefore || 0;
+        // Use the last phase's spendAfter (accounts for skipped phases)
+        const optimizedSpend = phases[3]?.spendAfter ?? phases[2]?.spendAfter ?? phases[1]?.spendAfter ?? currentSpend;
+        const budgetAmount = phases[1]?.budgetAmount || 0;
+        document.getElementById('rec-current-spend').textContent = formatCurrency(currentSpend) + '/mo';
+        document.getElementById('rec-budget').textContent = budgetAmount > 0 ? formatCurrency(budgetAmount) + '/mo' : 'Not set';
+        document.getElementById('rec-target-spend').textContent = formatCurrency(optimizedSpend) + '/mo';
+        document.getElementById('rec-total-savings').textContent = formatCurrency(totals.savings || 0) + '/mo';
+
+        // Budget vs Optimization bar
+        const barEl = document.getElementById('rec-budget-bar');
+        if (budgetAmount > 0) {
+            const savingsTotal = totals.savings || 0;
+            const savingsPct = ((savingsTotal / currentSpend) * 100).toFixed(0);
+            const maxVal = currentSpend * 1.15; // 15% padding so current marker isn't on the edge
+            const optimizedPct = ((optimizedSpend / maxVal) * 100).toFixed(1);
+            const budgetPctVal = ((budgetAmount / maxVal) * 100).toFixed(1);
+            const currentPct = ((currentSpend / maxVal) * 100).toFixed(1);
+            const diff = budgetAmount - optimizedSpend;
+
+            // Gradient fill spans full track
+            document.getElementById('rec-bar-fill').style.width = '100%';
+
+            // Position markers
+            document.getElementById('rec-marker-optimized').style.left = optimizedPct + '%';
+            document.getElementById('rec-marker-optimized-val').textContent = formatCurrency(optimizedSpend);
+            document.getElementById('rec-marker-budget').style.left = budgetPctVal + '%';
+            document.getElementById('rec-marker-budget-val').textContent = formatCurrency(budgetAmount);
+            document.getElementById('rec-marker-current').style.left = currentPct + '%';
+            document.getElementById('rec-marker-current-val').textContent = formatCurrency(currentSpend);
+
+            // Scale ticks
+            const scaleEl = document.getElementById('rec-bar-scale');
+            const step = Math.ceil(currentSpend / 4 / 100) * 100;
+            let ticks = [];
+            for (let v = 0; v <= currentSpend; v += step) {
+                ticks.push(formatCurrency(v));
+            }
+            if (ticks[ticks.length - 1] !== formatCurrency(currentSpend)) {
+                ticks.push(formatCurrency(currentSpend));
+            }
+            scaleEl.innerHTML = ticks.map(t => `<span class="rec-bar-tick">${t}</span>`).join('');
+
+            // Summary callouts
+            const summaryEl = document.getElementById('rec-bar-summary');
+            let budgetLine = '';
+            if (totals.budgetShortfall > 0) {
+                // Can't reach budget even with all optimizations
+                budgetLine = `<span class="rec-callout rec-callout-bad">⚠ Still ${formatCurrency(totals.budgetShortfall)}/mo over budget after all optimizations — recommend increasing budget to ${formatCurrency(totals.recommendedBudget)}/mo</span>`;
+            } else if (diff > 0) {
+                budgetLine = `<span class="rec-callout rec-callout-good">✓ Optimization lands ${formatCurrency(diff)}/mo under budget</span>`;
+            } else if (diff < 0) {
+                budgetLine = `<span class="rec-callout rec-callout-bad">⚠ Still ${formatCurrency(Math.abs(diff))}/mo over budget after all optimizations</span>`;
+            } else {
+                budgetLine = `<span class="rec-callout rec-callout-good">✓ Meets budget exactly</span>`;
+            }
+            summaryEl.innerHTML = `
+                <div class="rec-callout-row">
+                    <span class="rec-callout rec-callout-savings">🔥 ${savingsPct}% of current spend is recoverable — ${formatCurrency(savingsTotal)}/mo</span>
                 </div>
-                <div class="config-display">
-                    <strong>Suggested:</strong> ${rec.suggested_config}
-                </div>
-                <div class="savings-amount">
-                    💰 Save ${formatCurrency(rec.monthly_savings)}/month
-                </div>
-                <button class="btn-implement">Implement</button>
+                <div class="rec-callout-row">${budgetLine}</div>
             `;
-            container.appendChild(card);
+            barEl.classList.remove('hidden');
+        } else {
+            barEl.classList.add('hidden');
+        }
+
+        // Phase summary cards
+        phaseCardsEl.innerHTML = '';
+        [1, 2, 3].forEach(p => {
+            const phase = phases[p];
+            if (!phase) return;
+            const card = document.createElement('div');
+            card.className = `phase-summary-card phase-${p}${phase.skipped ? ' phase-skipped' : ''}`;
+            if (phase.skipped) {
+                card.innerHTML = `
+                    <div class="phase-card-header">
+                        <span class="phase-card-title">${phase.label}</span>
+                        <span class="phase-tag ${phase.tagClass}">${phase.tag}</span>
+                    </div>
+                    <div class="phase-card-savings phase-skipped-msg">✓ Not needed</div>
+                    <div class="phase-card-meta">
+                        <span style="grid-column:1/-1;text-align:center;color:var(--success-color);font-size:0.85rem">${phase.skipReason}</span>
+                    </div>
+                `;
+            } else {
+                card.innerHTML = `
+                    <div class="phase-card-header">
+                        <span class="phase-card-title">${phase.label}</span>
+                        <span class="phase-tag ${phase.tagClass}">${phase.tag}</span>
+                    </div>
+                    <div class="phase-card-savings">${formatCurrency(phase.savings)}/mo</div>
+                    <div class="phase-card-meta">
+                        <span><span>Upfront</span><span>${phase.upfront > 0 ? formatCurrency(phase.upfront) : '$0'}</span></span>
+                        <span><span>Effort</span><span>${phase.hours} hrs</span></span>
+                        <span><span>Downtime</span><span>${phase.downtime}</span></span>
+                        <span><span>Payback</span><span>${phase.payback}</span></span>
+                    </div>
+                `;
+            }
+            phaseCardsEl.appendChild(card);
         });
+
+        // Phase detail sections with plus/minus
+        detailEl.innerHTML = '';
+        [1, 2, 3].forEach(p => {
+            const phase = phases[p];
+            if (!phase) return;
+            if (phase.skipped) {
+                const section = document.createElement('div');
+                section.className = 'phase-detail-section phase-skipped';
+                section.innerHTML = `
+                    <div class="phase-detail-header">
+                        <span class="phase-detail-title">
+                            <span class="phase-tag ${phase.tagClass}">${phase.tag}</span>
+                            Phase ${p}: ${phase.label}
+                        </span>
+                        <span class="phase-skipped-badge">✓ Skipped</span>
+                    </div>
+                    <div class="phase-skipped-body">
+                        ${phase.skipReason} — budget target already met.
+                    </div>
+                `;
+                detailEl.appendChild(section);
+                return;
+            }
+            if (phase.items.length === 0) return;
+
+            const section = document.createElement('div');
+            section.className = 'phase-detail-section';
+
+            const isOpen = p === 1; // Phase 1 open by default
+            section.innerHTML = `
+                <div class="phase-detail-header" onclick="togglePhaseDetail(this)">
+                    <span class="phase-detail-title">
+                        <span class="phase-tag ${phase.tagClass}">${phase.tag}</span>
+                        Phase ${p}: ${phase.label} — ${formatCurrency(phase.savings)}/mo
+                    </span>
+                    <span class="phase-detail-toggle ${isOpen ? 'open' : ''}">▼</span>
+                </div>
+                <div class="phase-detail-body ${isOpen ? '' : 'collapsed'}">
+                    ${phase.items.map(rec => `
+                        <div class="rec-item">
+                            <div class="rec-item-header" onclick="toggleRecItem(this)" style="cursor:pointer">
+                                <span class="rec-item-service">🛠 ${rec.service_name} <span style="color:var(--text-secondary);font-weight:400">(${rec.provider_name})</span> — ${rec.action}</span>
+                                <span style="display:flex;align-items:center;gap:8px">
+                                    <span class="rec-item-savings">${formatCurrency(rec.savings)}/mo</span>
+                                    <span class="rec-item-toggle">▶</span>
+                                </span>
+                            </div>
+                            <div class="rec-item-detail collapsed">
+                                <div class="rec-plusminus">
+                                    <div class="rec-plus">
+                                        <div class="rec-plus-title">Benefits</div>
+                                        <ul>${rec.plus.map(t => `<li>${t}</li>`).join('')}</ul>
+                                    </div>
+                                    <div class="rec-minus">
+                                        <div class="rec-minus-title">Costs & Tradeoffs</div>
+                                        <ul>${rec.minus.map(t => `<li>${t}</li>`).join('')}</ul>
+                                    </div>
+                                </div>
+                                ${rec.risk ? `<div class="rec-risk"><span class="rec-risk-icon">⚠️</span>${rec.risk}</div>` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            detailEl.appendChild(section);
+        });
+
+        // Comparison table
+        const compBody = document.getElementById('rec-comparison-body');
+        compBody.innerHTML = '';
+        const rows = [
+            { label: 'Monthly Savings', key: 'savings', fmt: v => formatCurrency(v) },
+            { label: 'Upfront Cost', key: 'upfront', fmt: v => v > 0 ? formatCurrency(v) : '$0' },
+            { label: 'Labor Hours', key: 'hours', fmt: v => v + ' hrs' },
+            { label: 'Downtime', key: 'downtime', fmt: v => v },
+            { label: 'Payback', key: 'payback', fmt: v => v },
+            { label: 'Spend After', key: 'spendAfter', fmt: v => formatCurrency(v) + '/mo' },
+        ];
+        rows.forEach(r => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${r.label}</td>` +
+                [1, 2, 3].map(p => {
+                    const val = phases[p]?.[r.key] ?? 0;
+                    const cls = r.key === 'savings' ? 'class="rec-highlight"' : '';
+                    return `<td ${cls}>${r.fmt(val)}</td>`;
+                }).join('');
+            compBody.appendChild(tr);
+        });
+
+        // Bottom line
+        const bottomEl = document.getElementById('rec-bottom-line');
+        const phase1Savings = phases[1]?.savings || 0;
+        if (phase1Savings > 0) {
+            document.getElementById('rec-bottom-text').textContent =
+                `Phase 1 alone saves ${formatCurrency(phase1Savings)}/mo with zero downtime and zero upfront cost. Start there.`;
+            bottomEl.classList.remove('hidden');
+        } else {
+            bottomEl.classList.add('hidden');
+        }
+
     } catch (error) {
         console.error('Error loading recommendations:', error);
         showError('Failed to load recommendations. Please try again.', loadRecommendations);
     }
 }
 
-// Load Settings
+// Toggle phase detail accordion
+function togglePhaseDetail(headerEl) {
+    const body = headerEl.nextElementSibling;
+    const toggle = headerEl.querySelector('.phase-detail-toggle');
+    body.classList.toggle('collapsed');
+    toggle.classList.toggle('open');
+}
+
+// Toggle individual recommendation item
+function toggleRecItem(headerEl) {
+    const detail = headerEl.nextElementSibling;
+    const toggle = headerEl.querySelector('.rec-item-toggle');
+    detail.classList.toggle('collapsed');
+    toggle.textContent = detail.classList.contains('collapsed') ? '▶' : '▼';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SETTINGS PAGE — Budget settings with PATCH integration
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Current budget ID for PATCH operations
+let currentBudgetId = null;
+
 async function loadSettings() {
     try {
         hideError();
-        // Populate client dropdown if not already done
+        // Clear fields until real data loads
+        document.getElementById('budget-amount').value = '';
+        document.getElementById('monthly-limit').value = '';
+        document.getElementById('alert-threshold').value = 50;
+        document.getElementById('threshold-value').textContent = '---';
+        document.getElementById('enable-alerts').checked = false;
+
         await populateFilters();
+
+        // If a client is selected, load their budget
+        const clientId = document.getElementById('client-filter')?.value;
+        if (clientId) {
+            const budgets = await getBudgets();
+            const budget = getBudgetForClient(budgets, clientId);
+            if (budget) {
+                currentBudgetId = budget.budget_id;
+                document.getElementById('budget-amount').value = budget.budget_amount || '';
+                document.getElementById('monthly-limit').value = budget.monthly_limit || '';
+                const thresholdPct = budget.budget_amount > 0
+                    ? Math.round((budget.alert_threshold / budget.budget_amount) * 100)
+                    : 80;
+                document.getElementById('alert-threshold').value = thresholdPct;
+                document.getElementById('threshold-value').textContent = thresholdPct + '%';
+                document.getElementById('enable-alerts').checked = budget.alert_enabled || false;
+            }
+        }
     } catch (error) {
         console.error('Error loading settings:', error);
     }
 }
 
-// Save Budget Settings (Event Handler)
 async function handleSaveBudgetSettings() {
     try {
         const clientId = document.getElementById('client-filter').value;
         const budgetAmount = parseFloat(document.getElementById('budget-amount').value);
         const monthlyLimit = parseFloat(document.getElementById('monthly-limit').value);
-        const alertThreshold = parseInt(document.getElementById('alert-threshold').value);
+        const alertThresholdPct = parseInt(document.getElementById('alert-threshold').value);
         const alertEnabled = document.getElementById('enable-alerts').checked;
-        
-        // Validation
+
         if (!clientId) {
             showError('Please select a client from the navbar');
             return;
         }
-        
         if (!budgetAmount || budgetAmount <= 0) {
             showError('Please enter a valid budget amount');
             return;
         }
-        
         if (!monthlyLimit || monthlyLimit <= 0) {
             showError('Please enter a valid monthly limit');
             return;
         }
-        
-        const budgetData = {
-            client_id: parseInt(clientId),
-            budget_amount: budgetAmount,
-            monthly_limit: monthlyLimit,
-            alert_threshold: alertThreshold,
+
+        // Look up budget ID if we don't have it
+        if (!currentBudgetId) {
+            const budgets = await getBudgets();
+            const budget = getBudgetForClient(budgets, clientId);
+            if (budget) {
+                currentBudgetId = budget.budget_id;
+            } else {
+                showError('No budget record found for this client. Contact Backend Lead to create one.');
+                return;
+            }
+        }
+
+        // Convert threshold % to dollar amount for PATCH
+        const alertThresholdDollar = (alertThresholdPct / 100) * budgetAmount;
+
+        const patchData = {
+            budget_amount: budgetAmount.toFixed(2),
+            monthly_limit: monthlyLimit.toFixed(2),
+            alert_threshold: alertThresholdDollar.toFixed(2),
             alert_enabled: alertEnabled,
         };
-        
-        // Call the API function from api.js (not this function!)
-        const result = await window.saveBudgetSettings(budgetData);
-        
+
+        const result = await patchBudget(currentBudgetId, patchData);
+
         if (result.status === 'ok') {
             alert('Budget settings saved successfully!');
-            // Clear form
-            document.getElementById('budget-amount').value = '';
-            document.getElementById('monthly-limit').value = '';
+            console.log('Budget updated:', result.data);
         }
     } catch (error) {
         console.error('Error saving budget settings:', error);
-        showError('Budget save requires backend POST /budgets endpoint (not yet implemented). Please contact the Backend Lead.');
+        showError('Failed to save budget settings: ' + error.message);
     }
 }
 
@@ -1185,9 +1453,10 @@ async function exportData(format) {
             
             try {
                 // Fetch invoice and client data
-                const [invoices, clientsResponse] = await Promise.all([
+                const [invoices, clientsResponse, budgets] = await Promise.all([
                     getInvoices(),
                     getClients(),
+                    getBudgets(),
                 ]);
                 const clients = clientsResponse || [];
                 const clientMap = {};
@@ -1195,7 +1464,7 @@ async function exportData(format) {
 
                 // Determine which client(s) to invoice
                 const selectedClientId = document.getElementById('client-filter')?.value;
-                const filteredInvoices = selectedClientId
+                let filteredInvoices = selectedClientId
                     ? invoices.filter(inv => inv.client_id === parseInt(selectedClientId))
                     : invoices;
 
@@ -1216,13 +1485,18 @@ async function exportData(format) {
                 const midGray = [100, 100, 100];
                 const lightGray = [200, 200, 200];
 
-                // Aggregate line items from usages by service for each client
-                const buildLineItems = (clientId) => {
-                    const clientUsages = data.usages.filter(u => u.client_id === clientId);
+                // Fetch ALL usages (not filtered by dashboard date range)
+                const allData = await getDashboardData(365);
+
+                // Build line items for a specific month
+                const buildLineItems = (clientId, yearMonth) => {
+                    const clientUsages = allData.usages.filter(u =>
+                        u.client_id === clientId && u.usage_date.startsWith(yearMonth)
+                    );
                     const byService = {};
                     clientUsages.forEach(u => {
-                        const service = data.services.find(s => s.service_id === u.service_id);
-                        const provider = data.providers.find(p => p.provider_id === service?.provider_id);
+                        const service = allData.services.find(s => s.service_id === u.service_id);
+                        const provider = allData.providers.find(p => p.provider_id === service?.provider_id);
                         const key = u.service_id;
                         if (!byService[key]) {
                             byService[key] = {
@@ -1241,6 +1515,12 @@ async function exportData(format) {
                     return Object.values(byService).sort((a, b) => b.totalCost - a.totalCost);
                 };
 
+                // Invoice = December 2025, Compare = November 2025
+                const invoiceMonth = '2025-12';
+                const compareMonth = '2025-11';
+                const invoiceMonthLabel = 'December 2025';
+                const compareMonthLabel = 'November 2025';
+
                 // Group invoices by client for multi-page support
                 const clientIds = [...new Set(filteredInvoices.map(inv => inv.client_id))];
                 let isFirstPage = true;
@@ -1251,7 +1531,9 @@ async function exportData(format) {
                         .sort((a, b) => b.invoice_date.localeCompare(a.invoice_date));
                     const latestInvoice = clientInvoices[0];
                     const clientName = clientMap[clientId] || 'Unknown Client';
-                    const lineItems = buildLineItems(clientId);
+                    const lineItems = buildLineItems(clientId, invoiceMonth);
+                    const priorLineItems = buildLineItems(clientId, compareMonth);
+                    const priorTotal = priorLineItems.reduce((sum, item) => sum + item.totalCost, 0);
 
                     if (!isFirstPage) doc.addPage();
                     isFirstPage = false;
@@ -1286,23 +1568,34 @@ async function exportData(format) {
                     // Invoice period (right side)
                     doc.setFontSize(9);
                     doc.setTextColor(...midGray);
-                    doc.text('INVOICE PERIOD', pageWidth - 14, y, { align: 'right' });
-                    const invoiceDates = clientInvoices.map(inv => inv.invoice_date).sort();
+                    doc.text('BILLING PERIOD', pageWidth - 14, y, { align: 'right' });
                     doc.setFontSize(10);
                     doc.setTextColor(...darkGray);
-                    doc.text(invoiceDates[0] + ' to ' + invoiceDates[invoiceDates.length - 1], pageWidth - 14, y + 7, { align: 'right' });
+                    doc.text(invoiceMonthLabel, pageWidth - 14, y + 7, { align: 'right' });
 
-                    // Invoice Amount Box
+                    // Invoice Amount Box — uses actual December usage total
                     y = 70;
-                    const invoiceTotal = clientInvoices.reduce((sum, inv) => sum + parseFloat(inv.invoice_amount), 0);
+                    const usageTotal = lineItems.reduce((sum, item) => sum + item.totalCost, 0);
+                    const momDelta = priorTotal > 0 ? usageTotal - priorTotal : 0;
+                    const momPct = priorTotal > 0 ? ((momDelta / priorTotal) * 100).toFixed(1) : 0;
+                    const momSign = momDelta >= 0 ? '+' : '';
+
                     doc.setFillColor(245, 247, 250);
-                    doc.roundedRect(14, y, pageWidth - 28, 18, 2, 2, 'F');
+                    doc.roundedRect(14, y, pageWidth - 28, 24, 2, 2, 'F');
                     doc.setFontSize(10);
                     doc.setTextColor(...midGray);
-                    doc.text('AMOUNT DUE', 20, y + 8);
+                    doc.text('AMOUNT DUE — ' + invoiceMonthLabel.toUpperCase(), 20, y + 8);
                     doc.setFontSize(16);
                     doc.setTextColor(...darkGray);
-                    doc.text(formatCurrency(invoiceTotal), pageWidth - 20, y + 12, { align: 'right' });
+                    doc.text(formatCurrency(usageTotal), pageWidth - 20, y + 10, { align: 'right' });
+                    // Prior month comparison line
+                    doc.setFontSize(8);
+                    const momColor = momDelta > 0 ? [220, 53, 69] : [39, 174, 96];
+                    doc.setTextColor(...momColor);
+                    doc.text(momSign + formatCurrency(momDelta) + ' (' + momSign + momPct + '%) vs ' + compareMonthLabel, pageWidth - 20, y + 18, { align: 'right' });
+                    doc.setFontSize(8);
+                    doc.setTextColor(...midGray);
+                    doc.text(compareMonthLabel + ': ' + formatCurrency(priorTotal), 20, y + 18);
 
                     // Line Items Table
                     y = 96;
@@ -1338,16 +1631,25 @@ async function exportData(format) {
                         margin: { left: 14, right: 14 },
                     });
 
-                    // Totals Section
+                    // Totals Section — MoM comparison + budget
                     let finalY = doc.lastAutoTable.finalY + 5;
-                    const usageTotal = lineItems.reduce((sum, item) => sum + item.totalCost, 0);
-                    const potentialSavings = usageTotal * 0.15;
+                    const clientBudget = getBudgetForClient(budgets, clientId);
+                    const budgetAmt = clientBudget ? parseFloat(clientBudget.budget_amount) : 0;
+                    const budgetDelta = budgetAmt > 0 ? usageTotal - budgetAmt : 0;
 
                     const totalsData = [
-                        ['Subtotal (Usage)', '$' + usageTotal.toFixed(2)],
-                        ['Invoice Amount', '$' + invoiceTotal.toFixed(2)],
-                        ['Est. Optimization Savings', '-$' + potentialSavings.toFixed(2)],
+                        [invoiceMonthLabel + ' Total', '$' + usageTotal.toFixed(2)],
+                        [compareMonthLabel + ' Total', '$' + priorTotal.toFixed(2)],
+                        ['Month-over-Month Change', momSign + '$' + Math.abs(momDelta).toFixed(2) + ' (' + momSign + momPct + '%)'],
                     ];
+                    if (budgetAmt > 0) {
+                        totalsData.push(['Monthly Budget', '$' + budgetAmt.toFixed(2)]);
+                        if (budgetDelta > 0) {
+                            totalsData.push(['Over Budget', '+$' + budgetDelta.toFixed(2)]);
+                        } else {
+                            totalsData.push(['Under Budget', '-$' + Math.abs(budgetDelta).toFixed(2)]);
+                        }
+                    }
 
                     doc.autoTable({
                         startY: finalY,

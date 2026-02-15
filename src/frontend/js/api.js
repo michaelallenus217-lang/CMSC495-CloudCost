@@ -421,18 +421,28 @@ async function getDashboardData(days = 30) {
     }
 }
 
-// Get waste alerts (computed from usage data)
+/**
+ * Get waste alerts using the analysis engine from analysis.js.
+ * Fetches usages, services, providers, and budgets, then runs computeWasteAlerts().
+ *
+ * @param {Object} filters - { clientId, providerId, serviceId }
+ * @returns {Object} { alerts[], summary{} } from computeWasteAlerts
+ */
 async function getWasteAlerts(filters = {}) {
     try {
-        const { usages, services, providers } = await getDashboardData(30);
-        
-        // Apply global filters to usages before computing waste
+        const [dashData, budgets] = await Promise.all([
+            getDashboardData(30),
+            getBudgets(),
+        ]);
+
+        const { usages, services, providers } = dashData;
+
+        // Apply global filters
         let filteredUsages = usages;
         if (filters.clientId) {
             filteredUsages = filteredUsages.filter(u => u.client_id === parseInt(filters.clientId));
         }
         if (filters.providerId) {
-            // Get services for this provider to filter usages
             const providerServiceIds = services
                 .filter(s => s.provider_id === parseInt(filters.providerId))
                 .map(s => s.service_id);
@@ -441,105 +451,94 @@ async function getWasteAlerts(filters = {}) {
         if (filters.serviceId) {
             filteredUsages = filteredUsages.filter(u => u.service_id === parseInt(filters.serviceId));
         }
-        
-        // Group usages by service
-        const usagesByService = {};
-        filteredUsages.forEach(usage => {
-            if (!usagesByService[usage.service_id]) {
-                usagesByService[usage.service_id] = [];
-            }
-            usagesByService[usage.service_id].push(usage);
-        });
-        
-        // Compute waste alerts based on low average utilization
-        const alerts = [];
-        Object.keys(usagesByService).forEach(serviceId => {
-            const serviceUsages = usagesByService[serviceId];
-            const service = services.find(s => s.service_id === parseInt(serviceId));
-            
-            if (!service) return;
-            
-            // Calculate average units used per day
-            const avgUnitsUsed = serviceUsages.reduce((sum, u) => sum + u.units_used, 0) / serviceUsages.length;
-            
-            // For compute services, assume low utilization if avg < 20 units/day
-            // This is a simplified heuristic
-            let utilization = 0;
-            if (service.service_type === 'Compute') {
-                utilization = Math.min(avgUnitsUsed / 100, 1.0); // Assume 100 units = 100% utilization
-            } else if (service.service_type === 'Storage') {
-                utilization = Math.min(avgUnitsUsed / 1000, 1.0); // Assume 1000 GB = 100% utilization
-            } else {
-                utilization = Math.min(avgUnitsUsed / 10000, 1.0);
-            }
-            
-            // Flag as waste if utilization < 30%
-            if (utilization < 0.30) {
-                const dailyCost = serviceUsages.reduce((sum, u) => sum + u.total_cost, 0) / serviceUsages.length;
-                const potentialSavings = dailyCost * 30 * 0.5; // Estimate 50% savings if rightsized
-                
-                const provider = providers.find(p => p.provider_id === service.provider_id);
-                
-                alerts.push({
-                    service_id: service.service_id,
-                    service_name: service.service_name,
-                    provider_name: provider ? provider.provider_name : 'Unknown',
-                    utilization: utilization,
-                    daily_cost: dailyCost,
-                    potential_savings: potentialSavings,
-                });
-            }
-        });
-        
-        return alerts;
+
+        // Get budget for selected client (or null for all-clients view)
+        const budget = filters.clientId
+            ? getBudgetForClient(budgets, filters.clientId)
+            : null;
+
+        // Run the analysis engine
+        return computeWasteAlerts(filteredUsages, services, providers, budget);
     } catch (error) {
-        console.error('Error fetching waste alerts:', error);
-        return [];
+        console.error('Error computing waste alerts:', error);
+        return { alerts: [], summary: {} };
     }
 }
 
-// Get recommendations (mock implementation)
+/**
+ * Get optimization recommendations using the analysis engine.
+ * Builds on waste alerts, then runs computeRecommendations().
+ *
+ * @param {Object} filters - { clientId, providerId, serviceId }
+ * @returns {Object} { phases, totals } from computeRecommendations
+ */
 async function getRecommendations(filters = {}) {
-    // TODO: Replace with real backend endpoint when available
-    const alerts = await getWasteAlerts(filters);
-    
-    const recommendations = alerts.slice(0, 5).map((alert, index) => ({
-        id: index + 1,
-        title: `Rightsize ${alert.service_name}`,
-        description: `Current utilization is only ${Math.round(alert.utilization * 100)}%. Consider downsizing to reduce costs.`,
-        current_config: alert.service_name,
-        suggested_config: `Smaller instance or reduced allocation`,
-        monthly_savings: alert.potential_savings,
-        provider: alert.provider_name,
-    }));
-    
-    return recommendations;
+    try {
+        // Recommendations use ALL available data (not just 30 days)
+        // and ignore provider/service filters — we need the full picture
+        // to calculate accurate optimization potential
+        const [dashData, budgets] = await Promise.all([
+            getDashboardData(365),
+            getBudgets(),
+        ]);
+
+        const { usages, services, providers } = dashData;
+
+        // Only filter by client — recommendations must span all providers/services
+        let filteredUsages = usages;
+        if (filters.clientId) {
+            filteredUsages = filteredUsages.filter(u => u.client_id === parseInt(filters.clientId));
+        }
+
+        const budget = filters.clientId
+            ? getBudgetForClient(budgets, filters.clientId)
+            : null;
+
+        // Step 1: compute waste alerts
+        const { alerts, summary } = computeWasteAlerts(filteredUsages, services, providers, budget);
+
+        // Step 2: compute recommendations from alerts
+        return computeRecommendations(alerts, services, summary);
+    } catch (error) {
+        console.error('Error computing recommendations:', error);
+        return { phases: {}, totals: {} };
+    }
 }
 
-// Save budget settings (mock POST implementation)
-async function saveBudgetSettings(budgetData) {
+/**
+ * Save budget settings via PATCH /api/v1/budgets/:budgetId
+ * Uses Sean's PATCH endpoint (commit 11af8bf).
+ *
+ * @param {number} budgetId - budget record ID
+ * @param {Object} patchData - fields to update (budget_amount, monthly_limit, alert_threshold, alert_enabled)
+ * @returns {Object} API response
+ */
+async function patchBudget(budgetId, patchData) {
     if (API_CONFIG.USE_MOCK_DATA) {
-        console.log('Mock: Saving budget settings', budgetData);
-        return { status: 'ok', message: 'Budget settings saved successfully' };
+        console.log('Mock: Patching budget', budgetId, patchData);
+        return { status: 'ok', data: { ...patchData, budget_id: budgetId } };
     }
-    
+
     try {
-        const url = getApiUrl(ENDPOINTS.BUDGETS);
+        const url = getApiUrl(`${ENDPOINTS.BUDGETS}/${budgetId}`);
         const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(budgetData),
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(patchData),
         });
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         return await response.json();
     } catch (error) {
-        console.error('Error saving budget settings:', error);
+        console.error('Error patching budget:', error);
         throw error;
     }
+}
+
+// Legacy wrapper for backward compatibility
+async function saveBudgetSettings(budgetData) {
+    return patchBudget(budgetData.budget_id, budgetData);
 }

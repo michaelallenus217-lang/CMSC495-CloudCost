@@ -161,50 +161,193 @@
             </div>
         </section>
 
-        <!-- Component 4: WasteAlertsList -->
+        <!-- Component 4: WasteAlertsList (FR-04) -->
         <section id="waste-alerts-view" class="page">
-            <h2>Waste Alerts</h2>
-            <p class="page-description">Resources with low utilization or potential waste</p>
-            
+            <div class="waste-header">
+                <div>
+                    <h2>Waste Alerts</h2>
+                    <p class="page-description">Money on the table — resources with low utilization or optimization opportunities</p>
+                </div>
+            </div>
+
+            <!-- Waste Summary Banner -->
+            <div id="waste-summary-banner" class="waste-summary-banner">
+                <div class="waste-banner-item">
+                    <span class="waste-banner-label">Monthly Spend</span>
+                    <span class="waste-banner-value" id="waste-monthly-spend">$0</span>
+                </div>
+                <div class="waste-banner-divider"></div>
+                <div class="waste-banner-item">
+                    <span class="waste-banner-label">Recoverable Waste</span>
+                    <span class="waste-banner-value waste-banner-savings" id="waste-total-savings">$0/mo</span>
+                </div>
+                <div class="waste-banner-divider"></div>
+                <div class="waste-banner-item">
+                    <span class="waste-banner-label">Budget Target</span>
+                    <span class="waste-banner-value" id="waste-budget-target">$0</span>
+                </div>
+                <div class="waste-banner-divider"></div>
+                <div class="waste-banner-item">
+                    <span class="waste-banner-label">Over Budget</span>
+                    <span class="waste-banner-value waste-banner-danger" id="waste-over-budget">$0</span>
+                </div>
+            </div>
+
+            <!-- Severity Summary Cards -->
+            <div class="waste-severity-cards" id="waste-severity-cards">
+                <div class="severity-card severity-critical">
+                    <span class="severity-dot dot-critical"></span>
+                    <span class="severity-count" id="waste-critical-count">0</span>
+                    <span class="severity-label">Critical</span>
+                </div>
+                <div class="severity-card severity-warning">
+                    <span class="severity-dot dot-warning"></span>
+                    <span class="severity-count" id="waste-warning-count">0</span>
+                    <span class="severity-label">Warning</span>
+                </div>
+                <div class="severity-card severity-info">
+                    <span class="severity-dot dot-info"></span>
+                    <span class="severity-count" id="waste-info-count">0</span>
+                    <span class="severity-label">Optimized</span>
+                </div>
+            </div>
+
+            <!-- Provider Concentration -->
+            <div id="waste-provider-concentration" class="waste-concentration hidden">
+                <span class="concentration-icon">⚠</span>
+                <span class="concentration-text" id="waste-concentration-text"></span>
+            </div>
+
+            <!-- Alerts Table -->
             <div class="alerts-container">
                 <table class="alerts-table">
                     <thead>
                         <tr>
+                            <th>Severity</th>
                             <th class="sortable" data-sort="service_name">
-                                Service Name <span class="sort-indicator"></span>
+                                Service <span class="sort-indicator"></span>
                             </th>
                             <th class="sortable" data-sort="provider_name">
                                 Provider <span class="sort-indicator"></span>
                             </th>
-                            <th>Client</th>
                             <th class="sortable" data-sort="utilization">
-                                Avg Utilization <span class="sort-indicator"></span>
+                                Utilization <span class="sort-indicator"></span>
                             </th>
-                            <th class="sortable" data-sort="daily_cost">
-                                Daily Cost <span class="sort-indicator"></span>
+                            <th class="sortable" data-sort="monthly_cost">
+                                Monthly Cost <span class="sort-indicator"></span>
                             </th>
                             <th class="sortable" data-sort="potential_savings">
                                 Potential Savings <span class="sort-indicator"></span>
                             </th>
-                            <th>Action</th>
+                            <th>Trend</th>
+                            <th>Alt Provider</th>
                         </tr>
                     </thead>
                     <tbody id="waste-alerts-body">
                         <tr>
-                            <td colspan="7" class="loading">Loading waste alerts...</td>
+                            <td colspan="8" class="loading">Loading waste alerts...</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
+
+            <!-- Category Breakdown -->
+            <div id="waste-category-breakdown" class="waste-category-section">
+                <h3>Spend by Category</h3>
+                <div id="waste-category-bars" class="category-bars"></div>
+            </div>
         </section>
 
-        <!-- Component 5: RecommendationsPanel -->
+        <!-- Component 5: RecommendationsPanel (FR-05) -->
         <section id="recommendations-view" class="page">
-            <h2>Optimization Recommendations</h2>
-            <p class="page-description">Suggested actions to reduce cloud spending</p>
-            
-            <div id="recommendations-container" class="recommendations-grid">
-                <div class="loading">Loading recommendations...</div>
+            <div class="rec-header">
+                <div>
+                    <h2>Optimization Recommendations</h2>
+                    <p class="page-description">Savings Roadmap — phased plan to reduce cloud spending with cost-benefit analysis</p>
+                </div>
+            </div>
+
+            <!-- Savings Banner -->
+            <div id="rec-savings-banner" class="rec-savings-banner">
+                <div class="rec-banner-item">
+                    <span class="rec-banner-label">Current Spend</span>
+                    <span class="rec-banner-value" id="rec-current-spend">$0/mo</span>
+                </div>
+                <div class="rec-banner-arrow">→</div>
+                <div class="rec-banner-item">
+                    <span class="rec-banner-label">Budget</span>
+                    <span class="rec-banner-value" id="rec-budget">$0/mo</span>
+                </div>
+                <div class="rec-banner-arrow">→</div>
+                <div class="rec-banner-item">
+                    <span class="rec-banner-label">Optimized Spend</span>
+                    <span class="rec-banner-value rec-banner-target" id="rec-target-spend">$0/mo</span>
+                </div>
+                <div class="rec-banner-arrow">→</div>
+                <div class="rec-banner-item">
+                    <span class="rec-banner-label">Total Recoverable</span>
+                    <span class="rec-banner-value rec-banner-savings" id="rec-total-savings">$0/mo</span>
+                </div>
+            </div>
+            <!-- Optimization vs Budget Bar -->
+            <div id="rec-budget-bar" class="rec-budget-bar">
+                <div class="rec-bar-track">
+                    <div class="rec-bar-fill" id="rec-bar-fill"></div>
+                    <div class="rec-marker rec-marker-optimized" id="rec-marker-optimized">
+                        <span class="rec-marker-flag rec-flag-optimized">
+                            <span class="rec-flag-label">Optimized</span>
+                            <span class="rec-flag-value" id="rec-marker-optimized-val"></span>
+                        </span>
+                    </div>
+                    <div class="rec-marker rec-marker-budget" id="rec-marker-budget">
+                        <span class="rec-marker-flag rec-flag-budget">
+                            <span class="rec-flag-label">Budget</span>
+                            <span class="rec-flag-value" id="rec-marker-budget-val"></span>
+                        </span>
+                    </div>
+                    <div class="rec-marker rec-marker-current" id="rec-marker-current">
+                        <span class="rec-marker-flag rec-flag-current">
+                            <span class="rec-flag-label">Current</span>
+                            <span class="rec-flag-value" id="rec-marker-current-val"></span>
+                        </span>
+                    </div>
+                </div>
+                <div class="rec-bar-scale" id="rec-bar-scale"></div>
+                <div class="rec-bar-summary" id="rec-bar-summary"></div>
+            </div>
+
+            <!-- Phase Summary Cards -->
+            <div id="rec-phase-cards" class="rec-phase-cards">
+                <!-- Populated by JS -->
+            </div>
+
+            <!-- Phase Detail Sections -->
+            <div id="rec-phases-detail" class="rec-phases-detail">
+                <!-- Populated by JS -->
+            </div>
+
+            <!-- Summary Comparison Table -->
+            <div id="rec-summary-table" class="rec-summary-section">
+                <h3>Phase Comparison</h3>
+                <table class="rec-comparison-table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>Phase 1: Now</th>
+                            <th>Phase 2: 30 Days</th>
+                            <th>Phase 3: 90 Days</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rec-comparison-body">
+                        <tr><td colspan="4" class="loading">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Bottom Line -->
+            <div id="rec-bottom-line" class="rec-bottom-line hidden">
+                <span class="rec-bottom-icon">💡</span>
+                <span id="rec-bottom-text" class="rec-bottom-text"></span>
             </div>
         </section>
 
@@ -216,12 +359,12 @@
             <div class="settings-form">
                 <div class="form-group">
                     <label for="budget-amount">Monthly Budget ($)</label>
-                    <input type="number" id="budget-amount" class="form-control" placeholder="5000.00" step="0.01">
+                    <input type="number" id="budget-amount" class="form-control" placeholder="Loading..." step="0.01">
                 </div>
                 
                 <div class="form-group">
                     <label for="monthly-limit">Monthly Limit ($)</label>
-                    <input type="number" id="monthly-limit" class="form-control" placeholder="6000.00" step="0.01">
+                    <input type="number" id="monthly-limit" class="form-control" placeholder="Loading..." step="0.01">
                 </div>
                 
                 <div class="form-group">
@@ -250,7 +393,7 @@
                 <div class="export-controls">
                     <div class="export-buttons">
                         <button id="export-csv" class="btn-export">📊 Cost Analysis Report (CSV)</button>
-                        <button id="export-pdf" class="btn-export">📄 Executive Summary (PDF)</button>
+                        <button id="export-pdf" class="btn-export">📄 Invoice (PDF)</button>
                     </div>
                 </div>
                 <div id="export-progress" class="export-progress hidden">
@@ -275,6 +418,7 @@
     <script src="js/config.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/api.js"></script>
+    <script src="js/analysis.js"></script>
     <script src="js/dashboard.js"></script>
 </body>
 </html>
