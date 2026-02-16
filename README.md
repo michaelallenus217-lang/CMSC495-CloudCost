@@ -4,127 +4,176 @@
 
 ## Project Overview
 
-Organizations using multiple cloud providers (AWS, Azure, GCP) often overspend by 30-40% due to unused resources, poor visibility, and fragmented billing. Our platform aggregates cost data across cloud providers, analyzes spending patterns, identifies waste, and provides actionable recommendations for optimization.
+Organizations using multiple cloud providers (AWS, Azure, GCP) often overspend by 30–40% due to unused resources, poor visibility, and fragmented billing. The Cloud Cost Intelligence Platform aggregates cost data across providers, analyzes spending patterns, identifies waste, and delivers actionable optimization recommendations through a unified dashboard.
 
-**Goal:** Create a unified dashboard that makes cloud spending transparent and actionable.
+## Team — The Code Collective
 
-**Target Users:** IT managers, DevOps teams, and finance departments responsible for cloud budgets.
-
----
-
-## Team
-
-| Name | Time Zone |
-|------|-----------|
-| Ishan | EST |
-| Michael | PST |
-| Bryana | EST |
-| Sean | EST |
-| Tony | CET |
-
-*Roles to be determined in first team sync.*
-
----
+| Name              | Role             | Time Zone |
+|-------------------|------------------|-----------|
+| Michael Allen     | PM / Tech Lead   | PST       |
+| Ishan Akhouri     | Frontend Lead    | EST       |
+| Sean Kellner      | Backend Lead     | EST       |
+| Tony Arista       | Database Dev     | CET       |
+| Bryana Henderson  | Testing / QA     | EST       |
 
 ## Tech Stack
 
-*To be finalized by team.*
+| Layer            | Technology                          | Version                    |
+|------------------|-------------------------------------|----------------------------|
+| Frontend         | HTML / CSS / JavaScript + Chart.js  | Chart.js 4.4.7             |
+| Backend          | Python / Flask                      | Python 3.12 / Flask 3.1    |
+| Database         | Microsoft SQL Server (Azure SQL)    | Azure SQL Serverless Gen5  |
+| Containerization | Docker + nginx reverse proxy        | Docker 29.2.0              |
+| Authentication   | Microsoft Entra ID                  | DeviceCodeCredential       |
+| Testing          | pytest, Jest, Playwright            | pytest 8.x, Jest 29.7      |
 
-| Layer | Options |
-|-------|---------|
-| Frontend | React, JavaScript |
-| Backend | Python (Django/FastAPI) |
-| Database | PostgreSQL |
-| Cloud APIs | AWS Cost Explorer, Azure Cost Management |
-| Version Control | Git, GitHub |
+## Features (8 Functional Requirements — All Complete)
 
----
+| FR    | Feature                    | Status   |
+|-------|----------------------------|----------|
+| FR-01 | View Cost Dashboard        | Complete |
+| FR-02 | View Spending Trends       | Complete |
+| FR-03 | Filter by Provider/Service | Complete |
+| FR-04 | View Waste Alerts          | Complete |
+| FR-05 | View Recommendations       | Complete |
+| FR-06 | Export Reports (CSV/PDF)   | Complete |
+| FR-07 | Set Budget Thresholds      | Complete |
+| FR-08 | View Resource Metrics      | Complete |
 
-## Features (MVP Scope)
+## Quick Start
 
-*To be prioritized by team.*
+### Prerequisites
 
-- [ ] Multi-cloud cost data aggregation
-- [ ] Spending trend visualization
-- [ ] Waste identification (unused/idle resources)
-- [ ] Rightsizing recommendations
-- [ ] Daily budget tracking dashboard
-- [ ] Cost anomaly alerts
-- [ ] Exportable cost reports
+- Docker Desktop installed and running
+- Azure SQL credentials (provided to team and instructor)
 
----
+### Run the Application
 
-## Project Timeline
+```bash
+# 1. Clone the repository
+git clone https://github.com/michaelallenus217-lang/CMSC495-CloudCost.git
+cd CMSC495-CloudCost
 
-| Week | Phase | Deliverable |
-|------|-------|-------------|
-| 1 | Planning | Team formation, project selection |
-| 2 | Planning | Project Plan |
-| 3 | Design | Project Design |
-| 4 | Development | Phase I Source |
-| 5 | Testing | Test Plan |
-| 6 | Development | Phase II Source |
-| 7 | Documentation | User Guide |
-| 8 | Delivery | Final Report, Presentation |
+# 2. Start containers
+docker compose up --build -d
 
----
+# 3. Authenticate with Azure SQL
+#    A device code will appear in the terminal — follow the URL and enter the code
+
+# 4. Open the dashboard
+#    http://localhost:8080
+```
+
+### Run Tests
+
+```bash
+# JavaScript unit tests (94 tests)
+npm test --prefix src/frontend
+
+# Python tests — requires Docker containers running (49 tests)
+TEST_API_URL=http://localhost:5000/api/v1 pytest tests/ -v
+```
+
+### Stop the Application
+
+```bash
+docker compose down
+```
+
+## Architecture
+
+Three-tier containerized architecture:
+
+```
+Browser ──► nginx (:8080) ──► Flask API (:5000) ──► Azure SQL
+              │                      │
+         Static Files          REST /api/v1/
+         index.html            health.py
+         dashboard.js          clients.py
+         api.js                providers.py
+         analysis.js           services.py
+         utils.js              usages.py
+         config.js             invoices.py
+         style.css             budgets.py (GET + PATCH)
+```
+
+nginx serves static frontend files and proxies `/api/*` requests to Flask. Docker Compose orchestrates both containers on a single origin, resolving CORS without backend changes.
 
 ## Repository Structure
 
 ```
-├── /docs               # Documentation, meeting notes
-├── /src                # Source code
-│   ├── /frontend       # Frontend application
-│   ├── /backend        # Backend API
-│   └── /database       # SQL scripts, migrations
-├── /tests              # Test files
-├── README.md
-└── .gitignore
+CMSC495-CloudCost/
+├── src/
+│   ├── backend/           # Flask API (16 files, 1,028 lines)
+│   │   ├── routes/v1/     # 7 REST resource endpoints
+│   │   ├── api_http/      # Schemas, error handlers, responses
+│   │   ├── db/            # SQLAlchemy engine + session management
+│   │   └── Dockerfile
+│   ├── frontend/          # Dashboard UI (5 JS files, 3,487 lines)
+│   │   ├── js/            # api.js, analysis.js, dashboard.js, utils.js, config.js
+│   │   ├── css/           # style.css
+│   │   ├── __tests__/     # Jest test suites
+│   │   └── Dockerfile
+│   └── database/          # Schema, seed data, ERD
+│       ├── schema.md      # Table definitions
+│       ├── seed_usages v2.sql  # 40K+ usage records
+│       └── ERD.png        # Entity relationship diagram
+├── tests/                 # 49 pytest files (unit, integration, E2E)
+├── docs/                  # Project deliverables and meeting notes
+├── docker-compose.yml
+└── README.md
 ```
 
----
+## API Endpoints
 
-## Team Norms
+All endpoints prefixed with `/api/v1/`
 
-*To be discussed in first sync.*
+| Method | Endpoint                           | Description                    |
+|--------|------------------------------------|--------------------------------|
+| GET    | /health                            | Health check                   |
+| GET    | /health/db                         | Database connectivity check    |
+| GET    | /clients                           | List all clients               |
+| GET    | /clients/{id}                      | Get client by ID               |
+| GET    | /clients/{id}/budgets              | Client budgets                 |
+| GET    | /clients/{id}/invoices             | Client invoices                |
+| GET    | /clients/{id}/usages               | Client usage records           |
+| GET    | /providers                         | List all providers             |
+| GET    | /providers/{id}/services           | Provider services              |
+| GET    | /services                          | List all services              |
+| GET    | /services/{id}/usages              | Service usage records          |
+| GET    | /usages                            | List usage records (date filter)|
+| GET    | /budgets                           | List all budgets               |
+| GET    | /budgets/{id}                      | Get budget by ID               |
+| PATCH  | /budgets/{id}                      | Update budget threshold        |
+| GET    | /invoices                          | List all invoices              |
 
-- Respond to messages within 24 hours
-- Attend scheduled syncs or notify in advance
-- Flag blockers early—no surprises
-- Treat each other with dignity and respect
+## Test Summary
 
----
+| Category            | Framework  | Count | Pass | Fail |
+|---------------------|------------|-------|------|------|
+| Backend Unit Tests  | pytest     | 8     | 8    | 0    |
+| Frontend Unit Tests | Jest       | 94    | 94   | 0    |
+| Integration Tests   | pytest     | 8     | 8    | 0    |
+| E2E / FR Tests      | pytest     | 18    | 18   | 0    |
+| Functional Tests    | pytest     | 6     | 6    | 0    |
+| API Resource Tests  | pytest     | 9     | 9    | 0    |
+| Manual Tests        | Browser    | 50    | 50   | 0    |
+| **Total**           |            |**193**|**193**| **0**|
 
-## Communication
+## Documentation
 
-| Tool | Purpose |
-|------|---------|
-| MS Teams | Daily chat, quick questions |
-| Zoom/Teams | Scheduled syncs |
-| GitHub Issues | Task tracking, bugs |
-| Google Docs | Shared documentation |
-
----
-
-## First Sync Agenda
-
-- [ ] Introductions
-- [ ] Assign roles
-- [ ] Finalize tech stack
-- [ ] Prioritize MVP features
-- [ ] Set meeting schedule
-- [ ] Establish team norms
-- [ ] Review project timeline
-
----
-
-## Getting Started
-
-1. Clone the repo: `git clone [repo-url]`
-2. Check `/docs` for setup instructions
-3. See GitHub Projects for tasks
-
----
+| Document | Location |
+|----------|----------|
+| Project Plan | `/docs/01_Project_Plan.pdf` |
+| Project Design | `/docs/02_Project_Design.pdf` |
+| Phase I Report | `/docs/03_Phase_I_Report.pdf` |
+| Test Plan Report | `/docs/04_Test_Plan_Report.pdf` |
+| Testing & QA Plan | `/docs/Testing_and_QA_Plan.md` |
+| Database Schema | `/src/database/schema.md` |
+| Database README | `/src/database/README.md` |
+| ERD | `/src/database/ERD.png` |
+| Manual Testing Log | `/tests/MANUAL_TESTING.pdf` |
+| Meeting Notes | `/docs/meeting_notes/` |
 
 ## License
 
