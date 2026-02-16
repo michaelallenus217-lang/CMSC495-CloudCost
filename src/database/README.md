@@ -10,6 +10,40 @@ The Cloud Cost database provides a comprehensive solution for:
 - **Invoice Generation**: Automatically generating monthly invoices based on usage data
 - **Budget Monitoring**: Tracking client budgets and spending limits
 
+Owner account is managed through a Subscription: Azure for Students
+Access is granted for team members and instructor user accounts. 
+Control is accomplished by using Identity Access Management and assigning a privileged contributor role to the resource.
+The users umgc.edu Microsoft online account is used for authentication and access to resources.
+For this project Python generates a devicecode linking the Microsoft online account to a token that is used to connect to the Azure SQL Server.
+
+Server is a logical server through a public endpoint: cmsc495-cloud-cost.database.windows.net
+Access control is though IP based firewall rules allowing public address access to the resources
+
+An exception exists to allow Azure services and resources to access the server this option configures the firewall to allow connections from IP addresses allocated to any Azure service or asset, including connections from the subscriptions of other customers.
+
+Authorized users will be allowed to enter IP to firewall rules, owner can also add firewall rules.
+
+Connection to the server can be achieved through:
+SQL Server Management Studio
+Azure portal query editor
+Visual Studio Code
+Programming languages such as .NET, Python, and Java
+
+The following steps demonstrate how to connect using VS Code
+1. Install SQL Server mssql extension
+2. Create a new plain text file (Ctrl+N). In lower right status bar click "Plain Text" and change to SQL or MS SQL
+3. Connect to Database, press F1 to open Command Palette. Type "connect" and chose MS SQL:Connect
+4. Select create Connection Profile
+5. Add Profile Name; Server Name: cmsc495-cloud-cost.database.windows.net; Set Authentication: Microsoft Entra ID; Click "Sign In"
+6. Webpage will open; select your UMGC account; Azure account page will open stating: Your account was added successfully!; return to VS Code
+7. Enter Database name: CloudCostDatabase; click Connect
+8. Successful connection will populate on left Explorer panel showing Connections, and all database tables
+9. execute the following query to display the clients table:
+
+SELECT ClientID, ClientName, CreatedDate
+FROM dbo.Clients
+ORDER BY ClientID;
+
 ## Database Tables
 
 ### Core Tables
