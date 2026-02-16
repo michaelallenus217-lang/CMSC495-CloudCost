@@ -46,6 +46,7 @@ Organizations using multiple cloud providers (AWS, Azure, GCP) often overspend b
 
 - Docker Desktop installed and running
 - Azure SQL credentials (provided to team and instructor)
+- **Apple Silicon (M1/M2/M3) Macs:** Disable AirPlay Receiver (System Settings → General → AirDrop & Handoff) to free port 5000
 
 ### Run the Application
 
@@ -54,13 +55,26 @@ Organizations using multiple cloud providers (AWS, Azure, GCP) often overspend b
 git clone https://github.com/michaelallenus217-lang/CMSC495-CloudCost.git
 cd CMSC495-CloudCost
 
-# 2. Start containers
+# 2. Create backend environment file
+cp src/backend/.env.example src/backend/.env
+# Edit src/backend/.env — set these values:
+#   AZURE_SQL_SERVER=cmsc495-cloud-cost.database.windows.net
+#   AZURE_SQL_DATABASE=CloudCostDatabase
+#   FLASK_HOST=0.0.0.0   (required for Docker networking)
+
+# 3. Start containers
+#    Intel Macs:
 docker compose up --build -d
+#    Apple Silicon (M1/M2/M3) Macs:
+DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose up --build -d
 
-# 3. Authenticate with Azure SQL
-#    A device code will appear in the terminal — follow the URL and enter the code
+# 4. Authenticate with Azure SQL
+#    A device code will appear in backend logs:
+docker compose logs backend -f
+#    Go to https://microsoft.com/devicelogin and enter the code
+#    Press Ctrl+C after authentication completes
 
-# 4. Open the dashboard
+# 5. Open the dashboard
 #    http://localhost:8080
 ```
 
