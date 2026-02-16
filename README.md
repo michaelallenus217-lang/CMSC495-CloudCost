@@ -47,6 +47,7 @@ Organizations using multiple cloud providers (AWS, Azure, GCP) often overspend b
 - Docker Desktop installed and running
 - Azure SQL credentials (provided to team and instructor)
 - **Apple Silicon (M1/M2/M3) Macs:** Disable AirPlay Receiver (System Settings → General → AirDrop & Handoff) to free port 5000
+- **Azure SQL access:** If this is your first time connecting, sign in to [portal.azure.com](https://portal.azure.com) → SQL servers → cmsc495-cloud-cost → Networking → Add your client IPv4 address → Save
 
 ### Run the Application
 
